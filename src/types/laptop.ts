@@ -27,3 +27,5 @@ export interface ComparisonResult {
 }
 
 export type UserType = 'student' | 'gamer' | 'business' | 'creative' | 'casual';
+
+export type AppMode = 'comparison' | 'chat';
