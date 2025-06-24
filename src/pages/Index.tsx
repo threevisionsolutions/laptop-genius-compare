@@ -11,6 +11,13 @@ import { MessageSquare, Search } from 'lucide-react';
 import { LaptopSpecs, ComparisonResult, UserType, AppMode } from '../types/laptop';
 import { searchLaptops, generateAIComparison } from '../services/laptopService';
 
+interface FilterState {
+  priceRange: [number, number];
+  brands: string[];
+  minRating: number;
+  userType: string;
+}
+
 const Index = () => {
   const [darkMode, setDarkMode] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -24,23 +31,53 @@ const Index = () => {
     document.documentElement.classList.toggle('dark');
   };
 
-  const handleCompare = async (urls: string[], selectedUserType: string) => {
+  const handleCompare = async (urls: string[], selectedUserType: string, filters?: FilterState) => {
     setLoading(true);
-    setUserType(selectedUserType);
+    setUserType(selectedUserType || filters?.userType || '');
     
     try {
       console.log('Starting comparison for:', urls);
+      console.log('Applied filters:', filters);
       
       // Fetch laptop data
       const laptops = await searchLaptops(urls);
       console.log('Fetched laptops:', laptops);
       
+      // Apply filters to results
+      let filteredLaptops = laptops;
+      
+      if (filters) {
+        filteredLaptops = laptops.filter(laptop => {
+          // Price filter
+          if (laptop.price < filters.priceRange[0] || laptop.price > filters.priceRange[1]) {
+            return false;
+          }
+          
+          // Brand filter
+          if (filters.brands.length > 0 && !filters.brands.includes(laptop.brand)) {
+            return false;
+          }
+          
+          // Rating filter
+          if (filters.minRating > 0 && laptop.rating < filters.minRating) {
+            return false;
+          }
+          
+          return true;
+        });
+        
+        console.log(`Filtered ${laptops.length} laptops to ${filteredLaptops.length}`);
+      }
+      
       // Generate AI summary
-      const aiSummary = await generateAIComparison(laptops, selectedUserType as UserType);
+      const aiSummary = await generateAIComparison(
+        filteredLaptops, 
+        (selectedUserType || filters?.userType) as UserType
+      );
       console.log('Generated AI summary');
       
       const result: ComparisonResult = {
-        laptops,
+        laptops: filteredLaptops,
         aiSummary,
         timestamp: new Date()
       };
@@ -49,7 +86,7 @@ const Index = () => {
       
       toast({
         title: "Comparison Complete!",
-        description: `Analyzed ${laptops.length} laptops with AI insights.`,
+        description: `Analyzed ${filteredLaptops.length} laptops with AI insights.`,
       });
       
     } catch (error) {
@@ -150,7 +187,7 @@ const Index = () => {
                   <div className="text-6xl mb-4">💻</div>
                   <h2 className="text-2xl font-bold mb-2">Ready to Find Your Perfect Laptop?</h2>
                   <p className="text-muted-foreground max-w-md mx-auto">
-                    Enter laptop URLs or names above to get started with AI-powered comparison and recommendations.
+                    Search for laptops or paste URLs above. Use filters to narrow down your perfect match.
                   </p>
                 </div>
               )}
