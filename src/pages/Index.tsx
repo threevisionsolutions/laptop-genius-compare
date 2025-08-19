@@ -9,7 +9,7 @@ import RecommendationEngine from '../components/RecommendationEngine';
 import { Button } from '@/components/ui/button';
 import { MessageSquare, Search, Sparkles } from 'lucide-react';
 import { LaptopSpecs, ComparisonResult, UserType, AppMode } from '../types/laptop';
-import { searchLaptops, generateAIComparison } from '../services/laptopService';
+import { EnhancedLaptopService } from '../services/enhancedLaptopService';
 
 interface FilterState {
   priceRange: [number, number];
@@ -32,17 +32,26 @@ const Index = () => {
     document.documentElement.classList.toggle('dark');
   };
 
-  const handleCompare = async (urls: string[], selectedUserType: string, filters?: FilterState) => {
+  // Add API key state
+  const [apiKey, setApiKey] = useState(localStorage.getItem('openai_api_key') || '');
+
+  const handleCompare = async (urls: string[], selectedUserType: string, filters?: FilterState, openaiApiKey?: string) => {
     setLoading(true);
     setUserType(selectedUserType || filters?.userType || '');
     
+    // Update API key if provided
+    if (openaiApiKey && openaiApiKey !== apiKey) {
+      setApiKey(openaiApiKey);
+      localStorage.setItem('openai_api_key', openaiApiKey);
+    }
+    
     try {
-      console.log('Starting comparison for:', urls);
+      console.log('Starting enhanced comparison for:', urls);
       console.log('Applied filters:', filters);
       
-      // Fetch laptop data
-      const laptops = await searchLaptops(urls);
-      console.log('Fetched laptops:', laptops);
+      // Fetch laptop data using enhanced service
+      const laptops = await EnhancedLaptopService.searchLaptops(urls, selectedUserType);
+      console.log('Enhanced fetched laptops:', laptops);
       
       // Apply filters to results
       let filteredLaptops = laptops;
@@ -70,12 +79,13 @@ const Index = () => {
         console.log(`Filtered ${laptops.length} laptops to ${filteredLaptops.length}`);
       }
       
-      // Generate AI summary
-      const aiSummary = await generateAIComparison(
+      // Generate AI summary using enhanced service
+      const aiSummary = await EnhancedLaptopService.generateAIComparison(
         filteredLaptops, 
-        (selectedUserType || filters?.userType) as UserType
+        (selectedUserType || filters?.userType) as UserType,
+        apiKey || openaiApiKey
       );
-      console.log('Generated AI summary');
+      console.log('Generated enhanced AI summary');
       
       const result: ComparisonResult = {
         laptops: filteredLaptops,
@@ -88,14 +98,14 @@ const Index = () => {
       
       toast({
         title: "Comparison Complete!",
-        description: `Analyzed ${filteredLaptops.length} laptops with AI insights.`,
+        description: `Analyzed ${filteredLaptops.length} laptops with ${apiKey || openaiApiKey ? 'AI-powered' : 'enhanced'} insights.`,
       });
       
     } catch (error) {
-      console.error('Comparison failed:', error);
+      console.error('Enhanced comparison failed:', error);
       toast({
         title: "Comparison Failed",
-        description: "Please try again with valid laptop information.",
+        description: error instanceof Error ? error.message : "Please try again with valid laptop information.",
         variant: "destructive",
       });
     } finally {

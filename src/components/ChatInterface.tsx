@@ -11,6 +11,7 @@ import ApiKeyInput from './ApiKeyInput';
 import { ChatMessage as ChatMessageType, ChatSession } from '../types/chat';
 import { generateChatResponse } from '../services/chatService';
 import { generateOpenAIResponse } from '../services/openaiService';
+import { EnhancedLaptopService } from '../services/enhancedLaptopService';
 
 interface ChatInterfaceProps {
   userType?: string;
@@ -85,16 +86,33 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ userType }) => {
       let response: string;
       
       if (apiKey) {
-        // Use real OpenAI API
-        console.log('Using OpenAI API for response');
-        const openAIMessages = [...session.messages, userMessage].map(msg => ({
-          role: msg.role,
-          content: msg.content
-        }));
-        response = await generateOpenAIResponse(openAIMessages, apiKey);
+        try {
+          // Enhanced AI with laptop-specific context
+          const messages = [...session.messages, userMessage].map(msg => ({
+            role: msg.role,
+            content: msg.content
+          }));
+          
+          // Add system context for laptop expertise
+          const systemMessage = {
+            role: 'system' as const,
+            content: `You are a laptop shopping expert assistant. You help users find the perfect laptop by:
+            - Understanding their specific needs and use cases
+            - Providing accurate technical advice about CPUs, RAM, storage, etc.
+            - Comparing different brands and models objectively
+            - Explaining performance expectations for different tasks
+            - Suggesting budget-appropriate options
+            - Helping with laptop URL analysis when provided
+            
+            Be conversational, helpful, and specific. When users provide laptop URLs, acknowledge that you can help analyze them for comparison purposes.`
+          };
+          
+          response = await generateOpenAIResponse([systemMessage, ...messages], apiKey);
+        } catch (error) {
+          console.error('OpenAI API error:', error);
+          response = await generateChatResponse([...session.messages, userMessage], userType);
+        }
       } else {
-        // Fall back to mock responses
-        console.log('Using mock AI responses');
         response = await generateChatResponse([...session.messages, userMessage], userType);
       }
       
