@@ -38,14 +38,34 @@ const SpecsChart: React.FC<SpecsChartProps> = ({ laptops }) => {
     brand: laptop.brand
   }));
 
-  const radarData = laptops.map(laptop => ({
-    laptop: laptop.name.split(' ').slice(0, 2).join(' '),
-    Performance: Math.min(100, getNumericValue(laptop.ram, 'ram') * 6), // Scale RAM to ~100
-    Storage: Math.min(100, getNumericValue(laptop.storage, 'storage') / 10), // Scale storage
-    Value: Math.max(0, 100 - (laptop.price / 50)), // Inverse price for value
-    Rating: laptop.rating * 20,
-    Portability: laptop.weight ? Math.max(0, 100 - (parseFloat(laptop.weight.match(/[\d.]+/)?.[0] || '5') * 20)) : 50
-  }));
+  // Structure data for radar chart - each subject has values for all laptops
+  const radarChartData = [
+    { subject: 'Performance', ...laptops.reduce((acc, laptop, index) => {
+      const shortName = laptop.name.split(' ').slice(0, 2).join(' ');
+      acc[shortName] = Math.min(100, getNumericValue(laptop.ram, 'ram') * 6);
+      return acc;
+    }, {} as Record<string, number>) },
+    { subject: 'Storage', ...laptops.reduce((acc, laptop, index) => {
+      const shortName = laptop.name.split(' ').slice(0, 2).join(' ');
+      acc[shortName] = Math.min(100, getNumericValue(laptop.storage, 'storage') / 10);
+      return acc;
+    }, {} as Record<string, number>) },
+    { subject: 'Value', ...laptops.reduce((acc, laptop, index) => {
+      const shortName = laptop.name.split(' ').slice(0, 2).join(' ');
+      acc[shortName] = Math.max(0, 100 - (laptop.price / 50));
+      return acc;
+    }, {} as Record<string, number>) },
+    { subject: 'Rating', ...laptops.reduce((acc, laptop, index) => {
+      const shortName = laptop.name.split(' ').slice(0, 2).join(' ');
+      acc[shortName] = laptop.rating * 20;
+      return acc;
+    }, {} as Record<string, number>) },
+    { subject: 'Portability', ...laptops.reduce((acc, laptop, index) => {
+      const shortName = laptop.name.split(' ').slice(0, 2).join(' ');
+      acc[shortName] = laptop.weight ? Math.max(0, 100 - (parseFloat(laptop.weight.match(/[\d.]+/)?.[0] || '5') * 20)) : 50;
+      return acc;
+    }, {} as Record<string, number>) }
+  ];
 
   return (
     <div className="space-y-6">
@@ -74,10 +94,11 @@ const SpecsChart: React.FC<SpecsChartProps> = ({ laptops }) => {
             <YAxis />
             <Tooltip 
               formatter={(value, name) => {
-                if (name === 'RAM') return [`${value}GB`, name];
-                if (name === 'Storage') return [`${value}GB`, name];
-                if (name === 'Rating') return [`${(value/20).toFixed(1)}/5`, name];
-                return [value, name];
+                const numValue = Number(value);
+                if (name === 'RAM') return [`${numValue}GB`, name];
+                if (name === 'Storage') return [`${numValue}GB`, name];
+                if (name === 'Rating') return [`${(numValue/20).toFixed(1)}/5`, name];
+                return [numValue, name];
               }}
               labelFormatter={(label) => chartData.find(d => d.name === label)?.fullName || label}
             />
@@ -91,27 +112,23 @@ const SpecsChart: React.FC<SpecsChartProps> = ({ laptops }) => {
       <Card className="p-6">
         <h3 className="text-lg font-semibold mb-4">Overall Performance Radar</h3>
         <ResponsiveContainer width="100%" height={400}>
-          <RadarChart data={radarData[0] ? [radarData[0]] : []}>
+          <RadarChart data={radarChartData}>
             <PolarGrid />
             <PolarAngleAxis dataKey="subject" />
             <PolarRadiusAxis angle={90} domain={[0, 100]} />
-            {radarData.map((data, index) => (
-              <Radar
-                key={index}
-                name={data.laptop}
-                dataKey="Performance"
-                stroke={`hsl(${index * 137.5}, 70%, 50%)`}
-                fill={`hsl(${index * 137.5}, 70%, 50%)`}
-                fillOpacity={0.1}
-                data={[
-                  { subject: 'Performance', [data.laptop]: data.Performance },
-                  { subject: 'Storage', [data.laptop]: data.Storage },
-                  { subject: 'Value', [data.laptop]: data.Value },
-                  { subject: 'Rating', [data.laptop]: data.Rating },
-                  { subject: 'Portability', [data.laptop]: data.Portability }
-                ]}
-              />
-            ))}
+            {laptops.map((laptop, index) => {
+              const shortName = laptop.name.split(' ').slice(0, 2).join(' ');
+              return (
+                <Radar
+                  key={index}
+                  name={shortName}
+                  dataKey={shortName}
+                  stroke={`hsl(${index * 137.5}, 70%, 50%)`}
+                  fill={`hsl(${index * 137.5}, 70%, 50%)`}
+                  fillOpacity={0.1}
+                />
+              );
+            })}
             <Tooltip />
           </RadarChart>
         </ResponsiveContainer>
