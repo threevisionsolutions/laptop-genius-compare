@@ -21,21 +21,19 @@ export class WebScrapingService {
     try {
       console.log(`Scraping laptop data from: ${url}`);
       
-      // Use the fetch website tool to get the content
-      const response = await fetch('/api/fetch-website', {
-        method: 'POST',
+      // Simulate web scraping with enhanced patterns
+      const response = await fetch(url, {
+        method: 'GET',
         headers: {
-          'Content-Type': 'application/json',
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
         },
-        body: JSON.stringify({ url, formats: 'markdown,html' }),
       });
 
       if (!response.ok) {
         throw new Error('Failed to fetch website content');
       }
 
-      const data = await response.json();
-      const content = data.markdown || data.html || '';
+      const content = await response.text();
       
       // Parse the content to extract laptop specifications
       const laptopData = this.parseContent(content, url);

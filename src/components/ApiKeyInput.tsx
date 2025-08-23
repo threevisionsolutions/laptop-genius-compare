@@ -4,48 +4,68 @@ import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
-import { Eye, EyeOff, Key } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Eye, EyeOff, Key, Bot } from 'lucide-react';
 
 interface ApiKeyInputProps {
-  onApiKeySet: (apiKey: string) => void;
+  onApiKeySet: (apiKey: string, provider: string) => void;
   currentApiKey?: string;
+  currentProvider?: string;
 }
 
-const ApiKeyInput: React.FC<ApiKeyInputProps> = ({ onApiKeySet, currentApiKey }) => {
+const ApiKeyInput: React.FC<ApiKeyInputProps> = ({ onApiKeySet, currentApiKey, currentProvider }) => {
   const [apiKey, setApiKey] = useState(currentApiKey || '');
+  const [provider, setProvider] = useState(currentProvider || 'gemini');
   const [showKey, setShowKey] = useState(false);
 
   const handleSave = () => {
     if (apiKey.trim()) {
-      localStorage.setItem('openai_api_key', apiKey.trim());
-      onApiKeySet(apiKey.trim());
+      localStorage.setItem(`${provider}_api_key`, apiKey.trim());
+      localStorage.setItem('ai_provider', provider);
+      onApiKeySet(apiKey.trim(), provider);
     }
   };
 
   const handleClear = () => {
     setApiKey('');
-    localStorage.removeItem('openai_api_key');
-    onApiKeySet('');
+    localStorage.removeItem(`${provider}_api_key`);
+    localStorage.removeItem('ai_provider');
+    onApiKeySet('', provider);
   };
 
   return (
     <Card className="p-4 mb-4 bg-blue-50 border-blue-200">
       <div className="flex items-center gap-2 mb-3">
-        <Key className="w-4 h-4 text-blue-600" />
-        <h4 className="font-medium text-blue-900">OpenAI API Configuration</h4>
+        <Bot className="w-4 h-4 text-blue-600" />
+        <h4 className="font-medium text-blue-900">AI Provider Configuration</h4>
       </div>
       
       <div className="space-y-3">
         <div>
+          <Label htmlFor="provider" className="text-sm">
+            Choose AI Provider
+          </Label>
+          <Select value={provider} onValueChange={setProvider}>
+            <SelectTrigger className="mt-1">
+              <SelectValue placeholder="Select AI provider" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="gemini">Google Gemini (Free)</SelectItem>
+              <SelectItem value="openai">OpenAI GPT-4</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        
+        <div>
           <Label htmlFor="api-key" className="text-sm">
-            Enter your OpenAI API key for enhanced AI responses
+            Enter your {provider === 'gemini' ? 'Google Gemini' : 'OpenAI'} API key for enhanced AI responses
           </Label>
           <div className="flex gap-2 mt-1">
             <div className="relative flex-1">
               <Input
                 id="api-key"
                 type={showKey ? "text" : "password"}
-                placeholder="sk-..."
+                placeholder={provider === 'gemini' ? 'AIza...' : 'sk-...'}
                 value={apiKey}
                 onChange={(e) => setApiKey(e.target.value)}
                 className="pr-10"
@@ -71,7 +91,11 @@ const ApiKeyInput: React.FC<ApiKeyInputProps> = ({ onApiKeySet, currentApiKey })
         
         <p className="text-xs text-muted-foreground">
           Your API key is stored locally and never sent to our servers. 
-          Get your key from <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">OpenAI's platform</a>.
+          Get your key from {provider === 'gemini' ? (
+            <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">Google AI Studio</a>
+          ) : (
+            <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">OpenAI's platform</a>
+          )}.
         </p>
       </div>
     </Card>

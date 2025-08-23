@@ -1,5 +1,6 @@
 import { LaptopSpecs } from '../types/laptop';
 import { WebScrapingService } from './webScrapingService';
+import { ImprovedWebScrapingService } from './improvedWebScraping';
 import { generateOpenAIResponse } from './openaiService';
 
 // Enhanced mock data with more realistic specs
@@ -249,7 +250,15 @@ export class EnhancedLaptopService {
 
   private static async scrapeLaptopFromUrl(url: string): Promise<LaptopSpecs | null> {
     try {
-      return await WebScrapingService.scrapeLaptopFromUrl(url);
+      // Try improved scraping first
+      let laptop = await ImprovedWebScrapingService.scrapeLaptopFromUrl(url);
+      
+      // Fallback to original service if needed
+      if (!laptop) {
+        laptop = await WebScrapingService.scrapeLaptopFromUrl(url);
+      }
+      
+      return laptop;
     } catch (error) {
       console.error('Error scraping laptop:', error);
       return null;

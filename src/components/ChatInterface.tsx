@@ -11,6 +11,7 @@ import ApiKeyInput from './ApiKeyInput';
 import { ChatMessage as ChatMessageType, ChatSession } from '../types/chat';
 import { generateChatResponse } from '../services/chatService';
 import { generateOpenAIResponse } from '../services/openaiService';
+import { generateGeminiResponse } from '../services/geminiService';
 import { EnhancedLaptopService } from '../services/enhancedLaptopService';
 
 interface ChatInterfaceProps {
@@ -28,13 +29,16 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ userType }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [showApiKeyInput, setShowApiKeyInput] = useState(false);
   const [apiKey, setApiKey] = useState('');
+  const [aiProvider, setAiProvider] = useState('gemini');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
 
   useEffect(() => {
-    const savedApiKey = localStorage.getItem('openai_api_key');
+    const savedProvider = localStorage.getItem('ai_provider') || 'gemini';
+    const savedApiKey = localStorage.getItem(`${savedProvider}_api_key`);
     if (savedApiKey) {
       setApiKey(savedApiKey);
+      setAiProvider(savedProvider);
     }
   }, []);
 
@@ -87,8 +91,33 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ userType }) => {
       
       if (apiKey) {
         try {
-          // Enhanced AI with laptop-specific context
+          // Enhanced AI with laptop-specific context and web scraping
           const messages = [...session.messages, userMessage].map(msg => ({
+            role: msg.role,
+            content: msg.content
+          }));
+          
+          // Check if user message contains URLs for enhanced context
+          let enhancedContent = userMessage.content;
+          const urlMatch = userMessage.content.match(/https?:\/\/[^\s]+/g);
+          
+          if (urlMatch) {
+            console.log('Found URLs in message:', urlMatch);
+            // Try to enhance with web scraping data
+            try {
+              const scrapedData = await EnhancedLaptopService.searchLaptops(urlMatch);
+              if (scrapedData.length > 0) {
+                enhancedContent += `\n\nWebsite Analysis Results:\n${scrapedData.map(laptop => 
+                  `- ${laptop.name} by ${laptop.brand}: $${laptop.price} - ${laptop.cpu}, ${laptop.ram}, ${laptop.storage}`
+                ).join('\n')}`;
+              }
+            } catch (error) {
+              console.warn('Web scraping failed:', error);
+            }
+          }
+          
+          const enhancedMessage = { ...userMessage, content: enhancedContent };
+          const messagesWithEnhanced = [...session.messages, enhancedMessage].map(msg => ({
             role: msg.role,
             content: msg.content
           }));
@@ -96,20 +125,25 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ userType }) => {
           // Add system context for laptop expertise
           const systemMessage = {
             role: 'system' as const,
-            content: `You are a laptop shopping expert assistant. You help users find the perfect laptop by:
+            content: `You are a laptop shopping expert assistant with web scraping capabilities. You help users find the perfect laptop by:
             - Understanding their specific needs and use cases
             - Providing accurate technical advice about CPUs, RAM, storage, etc.
             - Comparing different brands and models objectively
             - Explaining performance expectations for different tasks
             - Suggesting budget-appropriate options
-            - Helping with laptop URL analysis when provided
+            - Analyzing laptop URLs and providing detailed comparisons
+            - Using real-time web data when URLs are provided
             
-            Be conversational, helpful, and specific. When users provide laptop URLs, acknowledge that you can help analyze them for comparison purposes.`
+            When users provide laptop URLs, use the scraped data to give accurate comparisons and recommendations. Be conversational, helpful, and specific.`
           };
           
-          response = await generateOpenAIResponse([systemMessage, ...messages], apiKey);
+          if (aiProvider === 'gemini') {
+            response = await generateGeminiResponse([systemMessage, ...messagesWithEnhanced], apiKey);
+          } else {
+            response = await generateOpenAIResponse([systemMessage, ...messagesWithEnhanced], apiKey);
+          }
         } catch (error) {
-          console.error('OpenAI API error:', error);
+          console.error(`${aiProvider} API error:`, error);
           response = await generateChatResponse([...session.messages, userMessage], userType);
         }
       } else {
@@ -166,17 +200,19 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ userType }) => {
     <div className="space-y-4">
       {showApiKeyInput && (
         <ApiKeyInput
-          onApiKeySet={(key) => {
+          onApiKeySet={(key, provider) => {
             setApiKey(key);
+            setAiProvider(provider);
             setShowApiKeyInput(false);
             if (key) {
               toast({
                 title: "API Key Saved",
-                description: "Now using OpenAI for enhanced responses!",
+                description: `Now using ${provider === 'gemini' ? 'Google Gemini' : 'OpenAI'} for enhanced responses!`,
               });
             }
           }}
           currentApiKey={apiKey}
+          currentProvider={aiProvider}
         />
       )}
 
@@ -184,7 +220,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ userType }) => {
         <div className="flex items-center justify-between p-4 border-b">
           <h3 className="text-lg font-semibold">
             Chat with AI Assistant
-            {apiKey && <span className="text-xs text-green-600 ml-2">• OpenAI Connected</span>}
+            {apiKey && <span className="text-xs text-green-600 ml-2">• {aiProvider === 'gemini' ? 'Gemini' : 'OpenAI'} Connected</span>}
           </h3>
           <div className="flex gap-2">
             <Button 
@@ -232,7 +268,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ userType }) => {
           </div>
           <p className="text-xs text-muted-foreground mt-2">
             Press Enter to send, Shift+Enter for new line
-            {!apiKey && ' • Setup OpenAI API for enhanced responses'}
+            {!apiKey && ' • Setup AI API for enhanced responses with web scraping'}
           </p>
         </div>
       </Card>
