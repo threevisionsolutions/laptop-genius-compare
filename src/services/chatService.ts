@@ -1,47 +1,275 @@
-
 import { ChatMessage } from '../types/chat';
 
-export const generateChatResponse = async (messages: ChatMessage[], userType?: string): Promise<string> => {
-  // Simulate API delay
-  await new Promise(resolve => setTimeout(resolve, 1500));
+export const generateChatResponse = async (messages: ChatMessage[], userType?: string, scrapingData?: any[]): Promise<string> => {
+  // Simulate processing delay
+  await new Promise(resolve => setTimeout(resolve, 800));
   
   const lastMessage = messages[messages.length - 1];
   const userMessage = lastMessage.content.toLowerCase();
+  const conversation = messages.map(m => m.content).join(' ').toLowerCase();
   
-  // Simulate intelligent responses based on common laptop queries
-  if (userMessage.includes('budget') || userMessage.includes('cheap') || userMessage.includes('affordable')) {
-    return generateBudgetResponse(userType);
+  // Handle URL-based comparisons with scraping data
+  if (scrapingData && scrapingData.length > 0) {
+    return generateComparisonResponse(scrapingData, userMessage);
   }
   
-  if (userMessage.includes('gaming') || userMessage.includes('game')) {
-    return generateGamingResponse();
+  // Check for URLs in the message
+  const urlPattern = /https?:\/\/[^\s]+/g;
+  if (userMessage.match(urlPattern)) {
+    return generateUrlAnalysisResponse(userMessage);
   }
   
-  if (userMessage.includes('programming') || userMessage.includes('coding') || userMessage.includes('development')) {
-    return generateProgrammingResponse();
+  // Context-aware responses based on conversation history
+  const context = analyzeConversationContext(conversation);
+  
+  // Multi-keyword and context-aware matching
+  if (matchesKeywords(userMessage, ['budget', 'cheap', 'affordable', 'under', 'price', 'cost']) || context.budgetFocused) {
+    return generateBudgetResponse(userType, context);
   }
   
-  if (userMessage.includes('student') || userMessage.includes('school') || userMessage.includes('university')) {
-    return generateStudentResponse();
+  if (matchesKeywords(userMessage, ['gaming', 'game', 'fps', 'graphics', 'rtx', 'nvidia']) || context.gamingFocused) {
+    return generateGamingResponse(context);
   }
   
-  if (userMessage.includes('business') || userMessage.includes('work') || userMessage.includes('office')) {
-    return generateBusinessResponse();
+  if (matchesKeywords(userMessage, ['programming', 'coding', 'development', 'python', 'javascript', 'ide']) || context.programmingFocused) {
+    return generateProgrammingResponse(context);
   }
   
-  if (userMessage.includes('specs') || userMessage.includes('cpu') || userMessage.includes('ram') || userMessage.includes('processor')) {
-    return generateSpecsResponse();
+  if (matchesKeywords(userMessage, ['student', 'school', 'university', 'college', 'study']) || context.studentFocused) {
+    return generateStudentResponse(context);
   }
   
-  if (userMessage.includes('brand') || userMessage.includes('apple') || userMessage.includes('dell') || userMessage.includes('hp')) {
-    return generateBrandResponse();
+  if (matchesKeywords(userMessage, ['business', 'work', 'office', 'professional', 'enterprise']) || context.businessFocused) {
+    return generateBusinessResponse(context);
   }
   
-  // Default helpful response
-  return generateGeneralResponse(userType);
+  if (matchesKeywords(userMessage, ['specs', 'cpu', 'ram', 'processor', 'performance', 'benchmark'])) {
+    return generateSpecsResponse(context);
+  }
+  
+  if (matchesKeywords(userMessage, ['brand', 'apple', 'dell', 'hp', 'lenovo', 'asus', 'acer', 'microsoft'])) {
+    return generateBrandResponse(context);
+  }
+  
+  if (matchesKeywords(userMessage, ['compare', 'comparison', 'vs', 'versus', 'difference', 'better'])) {
+    return generateComparisonGuideResponse(context);
+  }
+  
+  if (matchesKeywords(userMessage, ['recommend', 'suggestion', 'best', 'top', 'good'])) {
+    return generatePersonalizedRecommendation(userType, context, conversation);
+  }
+  
+  // Default contextual response
+  return generateContextualResponse(userType, context, userMessage);
 };
 
-const generateBudgetResponse = (userType?: string) => {
+// Helper functions
+const matchesKeywords = (text: string, keywords: string[]): boolean => {
+  return keywords.some(keyword => text.includes(keyword));
+};
+
+const analyzeConversationContext = (conversation: string) => {
+  return {
+    budgetFocused: matchesKeywords(conversation, ['budget', 'cheap', 'affordable', 'price']),
+    gamingFocused: matchesKeywords(conversation, ['gaming', 'game', 'fps', 'graphics']),
+    programmingFocused: matchesKeywords(conversation, ['programming', 'coding', 'development']),
+    studentFocused: matchesKeywords(conversation, ['student', 'school', 'university']),
+    businessFocused: matchesKeywords(conversation, ['business', 'work', 'office']),
+    mentionedBrands: extractMentionedBrands(conversation),
+    priceRange: extractPriceRange(conversation)
+  };
+};
+
+const extractMentionedBrands = (text: string): string[] => {
+  const brands = ['apple', 'dell', 'hp', 'lenovo', 'asus', 'acer', 'microsoft', 'razer', 'alienware'];
+  return brands.filter(brand => text.includes(brand));
+};
+
+const extractPriceRange = (text: string): string | null => {
+  const priceMatch = text.match(/\$?(\d+)/);
+  if (priceMatch) {
+    const price = parseInt(priceMatch[1]);
+    if (price < 500) return 'under-500';
+    if (price < 1000) return '500-1000';
+    if (price < 1500) return '1000-1500';
+    return 'over-1500';
+  }
+  return null;
+};
+
+const generateComparisonResponse = (scrapingData: any[], userMessage: string): string => {
+  const laptops = scrapingData.slice(0, 3); // Compare top 3
+  
+  return `I've analyzed the laptops from the URLs you provided. Here's my comparison:
+
+${laptops.map((laptop, index) => `
+**${index + 1}. ${laptop.name}** - $${laptop.price}
+• **CPU:** ${laptop.cpu}
+• **RAM:** ${laptop.ram}
+• **Storage:** ${laptop.storage}
+• **Graphics:** ${laptop.graphics || 'Integrated'}
+• **Display:** ${laptop.display || 'Standard'}
+`).join('')}
+
+**My Recommendation:**
+${generateSmartComparison(laptops, userMessage)}
+
+Would you like me to explain any specific aspect of these laptops or help you decide based on your use case?`;
+};
+
+const generateSmartComparison = (laptops: any[], userMessage: string): string => {
+  const gaming = matchesKeywords(userMessage, ['gaming', 'game']);
+  const budget = matchesKeywords(userMessage, ['budget', 'cheap']);
+  const programming = matchesKeywords(userMessage, ['programming', 'coding']);
+  
+  if (gaming) {
+    const bestGaming = laptops.find(l => l.graphics && !l.graphics.includes('Integrated'));
+    return bestGaming ? `For gaming, I'd recommend the ${bestGaming.name} due to its dedicated graphics card.` : 
+           'None of these laptops are ideal for gaming - consider models with dedicated GPUs like RTX or GTX series.';
+  }
+  
+  if (budget) {
+    const cheapest = laptops.reduce((prev, curr) => (prev.price < curr.price ? prev : curr));
+    return `For budget-conscious users, the ${cheapest.name} at $${cheapest.price} offers the best value.`;
+  }
+  
+  const balanced = laptops.find(l => l.ram && parseInt(l.ram) >= 8 && l.cpu && !l.cpu.includes('Celeron'));
+  return balanced ? `The ${balanced.name} offers the best overall balance of performance and features.` : 
+         'Consider looking for laptops with at least 8GB RAM and modern processors for better performance.';
+};
+
+const generateUrlAnalysisResponse = (userMessage: string): string => {
+  return `I can see you've shared laptop URLs! Let me analyze them for you...
+
+Unfortunately, I need a moment to process the website data. In the meantime, here's what I can help with:
+
+• **Compare specifications** side by side
+• **Explain technical terms** in simple language  
+• **Recommend based on your needs** - what will you use the laptop for?
+• **Check price-to-performance ratio**
+• **Identify potential issues** or limitations
+
+While I process the URLs, could you tell me:
+1. What's your primary use case? (work, gaming, school, etc.)
+2. What's your budget range?
+3. Any specific requirements? (screen size, weight, battery life)
+
+This will help me give you a more targeted analysis once I process the laptop data!`;
+};
+
+const generateComparisonGuideResponse = (context: any): string => {
+  return `I'd love to help you compare laptops! Here's my systematic approach:
+
+**Key Comparison Areas:**
+• **Performance:** CPU (Intel i5/i7 vs AMD Ryzen), RAM (8GB minimum, 16GB ideal)
+• **Graphics:** Integrated vs Dedicated (RTX/GTX for gaming)
+• **Storage:** SSD vs HDD (SSD is much faster)
+• **Display:** Screen size, resolution, refresh rate
+• **Build Quality:** Materials, keyboard, trackpad
+• **Battery Life:** Real-world usage expectations
+• **Price-to-Performance:** Best value for your needs
+
+**To give you specific comparisons, I need:**
+1. **Laptop models or URLs** you're considering
+2. **Your primary use case** (work, gaming, creative, school)
+3. **Budget range**
+4. **Must-have features** (touchscreen, 2-in-1, specific ports)
+
+Share some laptops you're looking at, and I'll break down the pros and cons of each!`;
+};
+
+const generatePersonalizedRecommendation = (userType: string | undefined, context: any, conversation: string): string => {
+  let recommendations = '';
+  
+  if (context.priceRange === 'under-500') {
+    recommendations = `**Budget Recommendations (Under $500):**
+• **ASUS VivoBook 15** - AMD Ryzen 5, great performance per dollar
+• **Acer Aspire 5** - Intel i5, solid build quality
+• **HP Pavilion 15** - Good battery life, reliable brand`;
+  } else if (context.priceRange === '500-1000') {
+    recommendations = `**Mid-Range Recommendations ($500-$1000):**
+• **Lenovo ThinkPad E15** - Excellent keyboard, business-grade durability
+• **ASUS ZenBook 14** - Premium design, great display
+• **HP Envy x360** - 2-in-1 flexibility, AMD Ryzen power`;
+  } else {
+    recommendations = `**My Current Top Recommendations:**
+• **For Overall Value:** Lenovo ThinkPad E15 - reliable, powerful, great keyboard
+• **For Students:** ASUS VivoBook S15 - lightweight, good battery, affordable
+• **For Professionals:** HP EliteBook 840 - premium build, security features
+• **For Gaming:** ASUS TUF Gaming - dedicated GPU, good cooling`;
+  }
+  
+  return `${recommendations}
+
+**Based on our conversation, I think you'd benefit from:**
+${generateContextualSuggestion(context, userType)}
+
+Would you like me to explain why I chose these, or do you have specific models in mind to compare?`;
+};
+
+const generateContextualSuggestion = (context: any, userType?: string): string => {
+  const suggestions = [];
+  
+  if (context.programmingFocused) {
+    suggestions.push('• At least 16GB RAM for smooth development environment');
+    suggestions.push('• SSD storage for fast code compilation');
+    suggestions.push('• Good keyboard for long coding sessions');
+  }
+  
+  if (context.studentFocused) {
+    suggestions.push('• Lightweight design for portability');
+    suggestions.push('• Good battery life for all-day use');
+    suggestions.push('• Affordable with solid performance');
+  }
+  
+  if (context.gamingFocused) {
+    suggestions.push('• Dedicated graphics card (GTX/RTX series)');
+    suggestions.push('• High refresh rate display');
+    suggestions.push('• Good cooling system');
+  }
+  
+  return suggestions.length > 0 ? suggestions.join('\n') : 
+    '• Focus on overall performance and reliability for your needs';
+};
+
+const generateContextualResponse = (userType: string | undefined, context: any, userMessage: string): string => {
+  const responses = [
+    `I'm here to help you find the perfect laptop! Based on what you've told me, I can provide personalized recommendations.
+
+**What I can help with:**
+• Find laptops that match your specific needs and budget
+• Explain technical specifications in simple terms
+• Compare different models side by side
+• Analyze laptop URLs you're considering
+
+**To give you the best advice, tell me:**
+1. What will you primarily use the laptop for?
+2. What's your budget range?
+3. Any preferences for brand, size, or features?
+
+Feel free to share laptop URLs for detailed analysis, or just describe what you're looking for!`,
+
+    `Great question! Let me help you navigate the laptop market.
+
+**Current Market Trends:**
+• AMD Ryzen processors offer excellent value vs Intel
+• SSD storage is now standard (avoid HDDs)
+• 8GB RAM minimum, 16GB recommended for multitasking
+• Integrated graphics fine for most tasks, dedicated GPU for gaming/creative work
+
+**Popular Categories:**
+• **Ultrabooks:** Thin, light, premium (Dell XPS, MacBook Air)
+• **Business:** Durable, secure (ThinkPad, EliteBook)  
+• **Gaming:** Powerful graphics, gaming features (ASUS ROG, MSI)
+• **Budget:** Good value, basic features (Aspire, VivoBook)
+
+What type of laptop user are you? I can narrow down recommendations based on your needs!`
+  ];
+  
+  return responses[Math.floor(Math.random() * responses.length)];
+};
+
+const generateBudgetResponse = (userType?: string, context?: any) => {
   return `For budget-friendly laptops, here are my top recommendations:
 
 **Under $500:**
@@ -65,7 +293,7 @@ ${userType ? `For ${userType} use, I'd especially recommend focusing on models w
 What's your target budget range?`;
 };
 
-const generateGamingResponse = () => {
+const generateGamingResponse = (context?: any) => {
   return `For gaming laptops, here's what you need to know:
 
 **Essential Gaming Specs:**
@@ -94,7 +322,7 @@ const generateGamingResponse = () => {
 What types of games are you planning to play?`;
 };
 
-const generateProgrammingResponse = () => {
+const generateProgrammingResponse = (context?: any) => {
   return `For programming and development, here are my recommendations:
 
 **Essential Development Specs:**
@@ -128,7 +356,7 @@ const generateProgrammingResponse = () => {
 What programming languages or frameworks do you primarily work with?`;
 };
 
-const generateStudentResponse = () => {
+const generateStudentResponse = (context?: any) => {
   return `For students, here are my budget-friendly recommendations:
 
 **Best Student Laptops:**
@@ -164,7 +392,7 @@ const generateStudentResponse = () => {
 What's your field of study? This can help me give more specific recommendations!`;
 };
 
-const generateBusinessResponse = () => {
+const generateBusinessResponse = (context?: any) => {
   return `For business and professional use, here are my recommendations:
 
 **Top Business Laptops:**
@@ -207,7 +435,7 @@ const generateBusinessResponse = () => {
 What type of business work will you primarily be doing?`;
 };
 
-const generateSpecsResponse = () => {
+const generateSpecsResponse = (context?: any) => {
   return `Let me break down laptop specs in simple terms:
 
 **CPU (Processor) - The Brain:**
@@ -247,7 +475,7 @@ const generateSpecsResponse = () => {
 What specific aspect would you like me to explain further?`;
 };
 
-const generateBrandResponse = () => {
+const generateBrandResponse = (context?: any) => {
   return `Here's my honest take on laptop brands:
 
 **Premium Tier:**
@@ -284,49 +512,4 @@ const generateBrandResponse = () => {
 • **For business**: Dell Latitude or ThinkPad
 
 What's most important to you: reliability, performance, price, or specific features?`;
-};
-
-const generateGeneralResponse = (userType?: string) => {
-  const responses = [
-    `I'd be happy to help you find the perfect laptop! To give you the best recommendations, could you tell me:
-
-• What's your primary use case? (work, gaming, school, general use)
-• What's your budget range?
-• Do you prefer Windows, Mac, or have no preference?
-• Any specific requirements? (screen size, weight, battery life)
-
-${userType ? `Since you mentioned ${userType} use, I can tailor my suggestions accordingly.` : ''}`,
-
-    `Great question! Here are some popular laptop topics I can help with:
-
-**Shopping Guidance:**
-• Budget recommendations for different needs
-• Brand comparisons and reliability
-• Spec explanations in simple terms
-
-**Use Case Specific:**
-• Student laptops (budget-friendly, portable)
-• Gaming laptops (performance, cooling)
-• Business laptops (security, durability)
-• Creative work (displays, processing power)
-
-**Technical Help:**
-• Understanding CPU, RAM, storage differences
-• Display technologies and what matters
-• Port selection and connectivity
-
-What would you like to know more about?`,
-
-    `I'm here to make laptop shopping easier! Some ways I can assist:
-
-🔍 **Product Research**: Help you understand specs and features
-💰 **Budget Planning**: Recommend best value in your price range  
-🆚 **Comparisons**: Side-by-side analysis of different models
-🎯 **Personalized Advice**: Tailored to your specific needs
-🛡️ **Avoid Pitfalls**: Common mistakes when laptop shopping
-
-What's your biggest question or concern about finding the right laptop?`
-  ];
-  
-  return responses[Math.floor(Math.random() * responses.length)];
 };

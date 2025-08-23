@@ -14,6 +14,17 @@ import { generateOpenAIResponse } from '../services/openaiService';
 import { generateGeminiResponse } from '../services/geminiService';
 import { EnhancedLaptopService } from '../services/enhancedLaptopService';
 
+// Helper function for web scraping
+const tryWebScraping = async (urls: string[]) => {
+  try {
+    const scrapedData = await EnhancedLaptopService.searchLaptops(urls);
+    return scrapedData.length > 0 ? scrapedData : undefined;
+  } catch (error) {
+    console.warn('Web scraping failed:', error);
+    return undefined;
+  }
+};
+
 interface ChatInterfaceProps {
   userType?: string;
 }
@@ -90,6 +101,9 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ userType }) => {
       let response: string;
       
       if (apiKey) {
+        // Check if user message contains URLs for enhanced context
+        const urlMatch = userMessage.content.match(/https?:\/\/[^\s]+/g);
+        
         try {
           // Enhanced AI with laptop-specific context and web scraping
           const messages = [...session.messages, userMessage].map(msg => ({
@@ -97,9 +111,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ userType }) => {
             content: msg.content
           }));
           
-          // Check if user message contains URLs for enhanced context
           let enhancedContent = userMessage.content;
-          const urlMatch = userMessage.content.match(/https?:\/\/[^\s]+/g);
           
           if (urlMatch) {
             console.log('Found URLs in message:', urlMatch);
@@ -144,10 +156,15 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ userType }) => {
           }
         } catch (error) {
           console.error(`${aiProvider} API error:`, error);
-          response = await generateChatResponse([...session.messages, userMessage], userType);
+          // If AI fails, use enhanced fallback with scraping data
+          const scrapingData = urlMatch ? await tryWebScraping(urlMatch) : undefined;
+          response = await generateChatResponse([...session.messages, userMessage], userType, scrapingData);
         }
       } else {
-        response = await generateChatResponse([...session.messages, userMessage], userType);
+        // Try web scraping for URLs even without AI
+        const urlMatch = userMessage.content.match(/https?:\/\/[^\s]+/g);
+        const scrapingData = urlMatch ? await tryWebScraping(urlMatch) : undefined;
+        response = await generateChatResponse([...session.messages, userMessage], userType, scrapingData);
       }
       
       const assistantMessage: ChatMessageType = {
