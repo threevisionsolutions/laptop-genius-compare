@@ -13,6 +13,7 @@ import { generateChatResponse } from '../services/chatService';
 import { generateOpenAIResponse } from '../services/openaiService';
 import { generateGeminiResponse } from '../services/geminiService';
 import { EnhancedLaptopService } from '../services/enhancedLaptopService';
+import { ProductDiscoveryService } from '../services/productDiscoveryService';
 
 // Helper function for web scraping
 const tryWebScraping = async (urls: string[]) => {
@@ -101,8 +102,22 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ userType }) => {
       let response: string;
       
       if (apiKey) {
-        // Check if user message contains URLs for enhanced context
+        // Check if user message contains URLs or discover from brand intent
         const urlMatch = userMessage.content.match(/https?:\/\/[^\s]+/g);
+        let collectedUrls = urlMatch as string[] | null;
+
+        if (!collectedUrls) {
+          const lower = userMessage.content.toLowerCase();
+          const brand = (lower.match(/apple|dell|hp|lenovo|asus|acer|msi|microsoft|samsung/) || [null])[0];
+          const intent = /(compare|latest|new|newest|best)/.test(lower);
+          if (brand && intent) {
+            try {
+              collectedUrls = await ProductDiscoveryService.discoverProductUrls(brand, 3);
+            } catch (e) {
+              console.warn('Discovery failed:', e);
+            }
+          }
+        }
         
         try {
           // Enhanced AI with laptop-specific context and web scraping
@@ -113,11 +128,11 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ userType }) => {
           
           let enhancedContent = userMessage.content;
           
-          if (urlMatch) {
-            console.log('Found URLs in message:', urlMatch);
+          if (collectedUrls && collectedUrls.length) {
+            console.log('Using URLs for analysis:', collectedUrls);
             // Try to enhance with web scraping data
             try {
-              const scrapedData = await EnhancedLaptopService.searchLaptops(urlMatch);
+              const scrapedData = await EnhancedLaptopService.searchLaptops(collectedUrls);
               if (scrapedData.length > 0) {
                 enhancedContent += `\n\nWebsite Analysis Results:\n${scrapedData.map(laptop => 
                   `- ${laptop.name} by ${laptop.brand}: $${laptop.price} - ${laptop.cpu}, ${laptop.ram}, ${laptop.storage}`
@@ -163,7 +178,20 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ userType }) => {
       } else {
         // Try web scraping for URLs even without AI
         const urlMatch = userMessage.content.match(/https?:\/\/[^\s]+/g);
-        const scrapingData = urlMatch ? await tryWebScraping(urlMatch) : undefined;
+        let urls = urlMatch as string[] | null;
+        if (!urls) {
+          const lower = userMessage.content.toLowerCase();
+          const brand = (lower.match(/apple|dell|hp|lenovo|asus|acer|msi|microsoft|samsung/) || [null])[0];
+          const intent = /(compare|latest|new|newest|best)/.test(lower);
+          if (brand && intent) {
+            try {
+              urls = await ProductDiscoveryService.discoverProductUrls(brand, 3);
+            } catch (e) {
+              console.warn('Discovery failed:', e);
+            }
+          }
+        }
+        const scrapingData = urls ? await tryWebScraping(urls) : undefined;
         response = await generateChatResponse([...session.messages, userMessage], userType, scrapingData);
       }
       

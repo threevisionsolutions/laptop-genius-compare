@@ -3,6 +3,8 @@ import React from 'react';
 import { Card } from '@/components/ui/card';
 import { Bot, User } from 'lucide-react';
 import { ChatMessage as ChatMessageType } from '../types/chat';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 interface ChatMessageProps {
   message: ChatMessageType;
@@ -21,11 +23,9 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message }) => {
       
       <Card className={`max-w-[80%] p-4 ${isUser ? 'bg-blue-50 border-blue-200' : 'bg-gray-50'}`}>
         <div className="prose prose-sm max-w-none">
-          {message.content.split('\n').map((line, index) => (
-            <p key={index} className="mb-2 last:mb-0">
-              {line}
-            </p>
-          ))}
+          <ReactMarkdown remarkPlugins={[remarkGfm]}>
+            {message.content}
+          </ReactMarkdown>
         </div>
         <div className="text-xs text-muted-foreground mt-2">
           {message.timestamp.toLocaleTimeString()}
