@@ -47,6 +47,11 @@ export const generateChatResponse = async (messages: ChatMessage[], userType?: s
     return generateSpecsResponse(context);
   }
   
+  // MacBook-specific comparisons
+  if (matchesKeywords(userMessage, ['macbook', 'mac book', 'macbook pro', 'macbook air', 'imac', 'mac mini'])) {
+    return generateMacBookComparisonResponse(context, userMessage);
+  }
+  
   if (matchesKeywords(userMessage, ['brand', 'apple', 'dell', 'hp', 'lenovo', 'asus', 'acer', 'microsoft'])) {
     return generateBrandResponse(context);
   }
@@ -473,6 +478,86 @@ const generateSpecsResponse = (context?: any) => {
 • Ports: USB-C, USB-A, HDMI variety
 
 What specific aspect would you like me to explain further?`;
+};
+
+const generateMacBookComparisonResponse = (context: any, userMessage: string): string => {
+  const currentDate = new Date().getFullYear();
+  
+  return `I'll help you compare MacBooks! Here's my comprehensive breakdown:
+
+**Current MacBook Lineup (${currentDate}):**
+
+**MacBook Air M2/M3** - $1,099-$1,499
+• **Best for:** Students, everyday use, portability
+• **CPU:** Apple M2/M3 chip (8-core CPU)
+• **RAM:** 8GB-24GB unified memory
+• **Storage:** 256GB-2TB SSD  
+• **Display:** 13.6" Liquid Retina (2560×1664)
+• **Battery:** Up to 18 hours
+• **Weight:** 2.7 lbs
+• **Pros:** Fanless design, excellent battery, lightweight
+• **Cons:** Limited ports, expensive storage upgrades
+
+**MacBook Pro 14"** - $1,999-$3,199
+• **Best for:** Professional work, content creation
+• **CPU:** M3 Pro/Max chips (11-16 core CPU)
+• **RAM:** 18GB-128GB unified memory
+• **Storage:** 512GB-8TB SSD
+• **Display:** 14.2" Liquid Retina XDR (3024×1964)
+• **Battery:** Up to 22 hours
+• **Weight:** 3.5 lbs
+• **Pros:** ProMotion display, excellent performance, more ports
+• **Cons:** Higher price, heavier than Air
+
+**MacBook Pro 16"** - $2,499-$4,299
+• **Best for:** Power users, developers, video editors
+• **CPU:** M3 Pro/Max/Ultra chips (12-24 core CPU)
+• **RAM:** 18GB-128GB unified memory
+• **Storage:** 512GB-8TB SSD
+• **Display:** 16.2" Liquid Retina XDR (3456×2234)
+• **Battery:** Up to 22 hours
+• **Weight:** 4.8 lbs
+• **Pros:** Largest screen, maximum performance, best cooling
+• **Cons:** Most expensive, heaviest
+
+**My Recommendation Based on Use Case:**
+${generateMacBookRecommendation(userMessage, context)}
+
+**Key Advantages of MacBooks:**
+• Exceptional build quality and longevity
+• Outstanding battery life (best in class)
+• macOS ecosystem integration
+• Excellent displays with accurate colors
+• Strong resale value
+• Great for creative work (design, video, music)
+
+**Consider Windows alternatives if:**
+• You need specific Windows software
+• Gaming is important to you
+• You want more hardware customization options
+• Budget is tight (more options under $1000)
+
+Would you like me to compare specific MacBook models or explain how they stack up against Windows laptops for your use case?`;
+};
+
+const generateMacBookRecommendation = (userMessage: string, context: any): string => {
+  if (matchesKeywords(userMessage, ['student', 'school', 'basic', 'budget'])) {
+    return `For students or basic use, I'd recommend the **MacBook Air M2** (base model). It offers excellent performance for everyday tasks, amazing battery life, and the signature MacBook build quality at the most accessible price point.`;
+  }
+  
+  if (matchesKeywords(userMessage, ['professional', 'work', 'creative', 'video', 'photo', 'design'])) {
+    return `For professional work, the **MacBook Pro 14" with M3 Pro** is the sweet spot. You get the professional features like the XDR display, better performance, and more ports without the premium of the 16" model.`;
+  }
+  
+  if (matchesKeywords(userMessage, ['programming', 'coding', 'development'])) {
+    return `For programming, either the **MacBook Air M2 (16GB)** for light development or **MacBook Pro 14"** for intensive development work. The unified memory architecture makes multitasking very smooth.`;
+  }
+  
+  if (matchesKeywords(userMessage, ['gaming', 'game'])) {
+    return `MacBooks aren't ideal for gaming due to limited game compatibility and focus on efficiency over gaming performance. Consider Windows laptops with dedicated GPUs if gaming is important.`;
+  }
+  
+  return `For most users, I'd recommend the **MacBook Air M2** as it offers the best balance of performance, portability, and price. Upgrade to 16GB RAM if you do heavy multitasking or keep many browser tabs open.`;
 };
 
 const generateBrandResponse = (context?: any) => {
