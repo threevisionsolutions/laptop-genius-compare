@@ -1,3 +1,5 @@
+import { TavilyService } from './tavilyService';
+
 export class ProductDiscoveryService {
   private static BRAND_DOMAINS: Record<string, string> = {
     apple: 'apple.com',
@@ -11,10 +13,21 @@ export class ProductDiscoveryService {
     samsung: 'samsung.com',
   };
 
-  // Discover top product URLs for a brand using DuckDuckGo HTML via AllOrigins CORS proxy
-  static async discoverProductUrls(brand: string, limit = 3): Promise<string[]> {
+  // Discover top product URLs for a brand. Tries Tavily first (if key provided), then falls back to DuckDuckGo via AllOrigins.
+  static async discoverProductUrls(brand: string, limit = 3, tavilyApiKey?: string): Promise<string[]> {
     const normalized = brand.toLowerCase();
     const domain = this.BRAND_DOMAINS[normalized] || `${normalized}.com`;
+
+    // Prefer Tavily when API key is available
+    if (tavilyApiKey) {
+      try {
+        const tavilyUrls = await TavilyService.searchBrandProductUrls(brand, tavilyApiKey, limit);
+        if (tavilyUrls.length) return tavilyUrls;
+      } catch (e) {
+        console.warn('Tavily discovery failed, falling back:', e);
+      }
+    }
+
     const query = `site:${domain} (laptop OR notebook) (buy OR product OR shop)`;
     const target = `https://duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
     const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(target)}`;

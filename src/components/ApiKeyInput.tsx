@@ -17,7 +17,8 @@ const ApiKeyInput: React.FC<ApiKeyInputProps> = ({ onApiKeySet, currentApiKey, c
   const [apiKey, setApiKey] = useState(currentApiKey || '');
   const [provider, setProvider] = useState(currentProvider || 'gemini');
   const [showKey, setShowKey] = useState(false);
-
+  const [tavilyKey, setTavilyKey] = useState(localStorage.getItem('tavily_api_key') || '');
+  const [showTavilyKey, setShowTavilyKey] = useState(false);
   const handleSave = () => {
     if (apiKey.trim()) {
       localStorage.setItem(`${provider}_api_key`, apiKey.trim());
@@ -87,6 +88,49 @@ const ApiKeyInput: React.FC<ApiKeyInputProps> = ({ onApiKeySet, currentApiKey, c
               </Button>
             )}
           </div>
+        </div>
+        
+        <div className="pt-4 border-t">
+          <Label htmlFor="tavily-key" className="text-sm">
+            Tavily Web Search API key (optional)
+          </Label>
+          <div className="flex gap-2 mt-1">
+            <div className="relative flex-1">
+              <Input
+                id="tavily-key"
+                type={showTavilyKey ? "text" : "password"}
+                placeholder="tvly-..."
+                value={tavilyKey}
+                onChange={(e) => setTavilyKey(e.target.value)}
+                className="pr-10"
+              />
+              <button
+                type="button"
+                onClick={() => setShowTavilyKey(!showTavilyKey)}
+                className="absolute right-2 top-1/2 transform -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              >
+                {showTavilyKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
+            <Button
+              onClick={() => tavilyKey.trim() && localStorage.setItem('tavily_api_key', tavilyKey.trim())}
+              disabled={!tavilyKey.trim()}
+            >
+              Save
+            </Button>
+            {tavilyKey && (
+              <Button
+                variant="outline"
+                onClick={() => { setTavilyKey(''); localStorage.removeItem('tavily_api_key'); }}
+              >
+                Clear
+              </Button>
+            )}
+          </div>
+          <p className="text-xs text-muted-foreground mt-1">
+            Improves web discovery via Tavily. Get a key at
+            {' '}<a href="https://docs.tavily.com" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">Tavily</a>.
+          </p>
         </div>
         
         <p className="text-xs text-muted-foreground">

@@ -112,7 +112,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ userType }) => {
           const intent = /(compare|latest|new|newest|best)/.test(lower);
           if (brand && intent) {
             try {
-              collectedUrls = await ProductDiscoveryService.discoverProductUrls(brand, 3);
+              collectedUrls = await ProductDiscoveryService.discoverProductUrls(brand, 3, localStorage.getItem('tavily_api_key') || undefined);
             } catch (e) {
               console.warn('Discovery failed:', e);
             }
@@ -185,7 +185,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ userType }) => {
           const intent = /(compare|latest|new|newest|best)/.test(lower);
           if (brand && intent) {
             try {
-              urls = await ProductDiscoveryService.discoverProductUrls(brand, 3);
+              urls = await ProductDiscoveryService.discoverProductUrls(brand, 3, localStorage.getItem('tavily_api_key') || undefined);
             } catch (e) {
               console.warn('Discovery failed:', e);
             }
