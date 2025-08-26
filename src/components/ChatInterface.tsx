@@ -178,7 +178,27 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ userType }) => {
           response = await generateChatResponse([...session.messages, userMessage], userType, productData);
         }
       } else {
-        // Use product data even without AI API
+        // Try to get product data even without AI API - improve fallback for generic queries
+        if (!productData) {
+          const lower = userMessage.content.toLowerCase();
+          const brand = (lower.match(/apple|dell|hp|lenovo|asus|acer|msi|microsoft|samsung/) || [null])[0];
+          const intent = /(compare|latest|new|newest|best|show|find|search|laptop)/.test(lower);
+          
+          if ((brand && intent) || lower.includes('laptop')) {
+            try {
+              const searchBrand = brand || 'apple'; // Default to apple if no specific brand
+              const urls = await ProductDiscoveryService.discoverProductUrls(searchBrand, 3, localStorage.getItem('tavily_api_key') || undefined);
+              if (urls.length > 0) {
+                productData = await EnhancedLaptopService.searchLaptops(urls);
+                console.log('Fallback: Found product data:', productData);
+              }
+            } catch (e) {
+              console.warn('Fallback product discovery failed:', e);
+            }
+          }
+        }
+        
+        // Use product data or enhanced chat service
         response = await generateChatResponse([...session.messages, userMessage], userType, productData);
       }
       
