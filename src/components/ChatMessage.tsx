@@ -5,6 +5,7 @@ import { Bot, User } from 'lucide-react';
 import { ChatMessage as ChatMessageType } from '../types/chat';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import ProductCarousel from './ProductCarousel';
 
 interface ChatMessageProps {
   message: ChatMessageType;
@@ -27,6 +28,14 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message }) => {
             {message.content}
           </ReactMarkdown>
         </div>
+        
+        {/* Show product carousel if products data exists */}
+        {!isUser && message.products && message.products.length > 0 && (
+          <div className="mt-4 not-prose">
+            <ProductCarousel products={message.products} />
+          </div>
+        )}
+        
         <div className="text-xs text-muted-foreground mt-2">
           {message.timestamp.toLocaleTimeString()}
         </div>

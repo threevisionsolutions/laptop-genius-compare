@@ -101,47 +101,50 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ userType }) => {
     try {
       let response: string;
       
-      if (apiKey) {
-        // Check if user message contains URLs or discover from brand intent
-        const urlMatch = userMessage.content.match(/https?:\/\/[^\s]+/g);
-        let collectedUrls = urlMatch as string[] | null;
+      // Check if user message contains URLs or discover from brand intent
+      const urlMatch = userMessage.content.match(/https?:\/\/[^\s]+/g);
+      let collectedUrls = urlMatch as string[] | null;
+      let productData: any[] | undefined;
 
-        if (!collectedUrls) {
-          const lower = userMessage.content.toLowerCase();
-          const brand = (lower.match(/apple|dell|hp|lenovo|asus|acer|msi|microsoft|samsung/) || [null])[0];
-          const intent = /(compare|latest|new|newest|best)/.test(lower);
-          if (brand && intent) {
-            try {
-              collectedUrls = await ProductDiscoveryService.discoverProductUrls(brand, 3, localStorage.getItem('tavily_api_key') || undefined);
-            } catch (e) {
-              console.warn('Discovery failed:', e);
-            }
+      if (!collectedUrls) {
+        const lower = userMessage.content.toLowerCase();
+        const brand = (lower.match(/apple|dell|hp|lenovo|asus|acer|msi|microsoft|samsung/) || [null])[0];
+        const intent = /(compare|latest|new|newest|best|show|find|search)/.test(lower);
+        if (brand && intent) {
+          try {
+            collectedUrls = await ProductDiscoveryService.discoverProductUrls(brand, 3, localStorage.getItem('tavily_api_key') || undefined);
+          } catch (e) {
+            console.warn('Discovery failed:', e);
           }
+        }
+      }
+
+      // Try to get product data if we have URLs
+      if (collectedUrls && collectedUrls.length > 0) {
+        try {
+          productData = await EnhancedLaptopService.searchLaptops(collectedUrls);
+          console.log('Found product data:', productData);
+        } catch (error) {
+          console.warn('Failed to get product data:', error);
+        }
+      }
+
+      if (apiKey) {
+        
+        let enhancedContent = userMessage.content;
+        
+        if (productData && productData.length > 0) {
+          enhancedContent += `\n\nI found ${productData.length} laptops that match your criteria. Here are the detailed specifications:\n${productData.map(laptop => 
+            `- ${laptop.name} by ${laptop.brand}: ${laptop.currency}${laptop.price} - ${laptop.cpu}, ${laptop.ram}, ${laptop.storage}`
+          ).join('\n')}`;
         }
         
         try {
-          // Enhanced AI with laptop-specific context and web scraping
+          // Enhanced AI with laptop-specific context and product data
           const messages = [...session.messages, userMessage].map(msg => ({
             role: msg.role,
             content: msg.content
           }));
-          
-          let enhancedContent = userMessage.content;
-          
-          if (collectedUrls && collectedUrls.length) {
-            console.log('Using URLs for analysis:', collectedUrls);
-            // Try to enhance with web scraping data
-            try {
-              const scrapedData = await EnhancedLaptopService.searchLaptops(collectedUrls);
-              if (scrapedData.length > 0) {
-                enhancedContent += `\n\nWebsite Analysis Results:\n${scrapedData.map(laptop => 
-                  `- ${laptop.name} by ${laptop.brand}: $${laptop.price} - ${laptop.cpu}, ${laptop.ram}, ${laptop.storage}`
-                ).join('\n')}`;
-              }
-            } catch (error) {
-              console.warn('Web scraping failed:', error);
-            }
-          }
           
           const enhancedMessage = { ...userMessage, content: enhancedContent };
           const messagesWithEnhanced = [...session.messages, enhancedMessage].map(msg => ({
@@ -171,35 +174,20 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ userType }) => {
           }
         } catch (error) {
           console.error(`${aiProvider} API error:`, error);
-          // If AI fails, use enhanced fallback with scraping data
-          const scrapingData = urlMatch ? await tryWebScraping(urlMatch) : undefined;
-          response = await generateChatResponse([...session.messages, userMessage], userType, scrapingData);
+          // If AI fails, use enhanced fallback with product data
+          response = await generateChatResponse([...session.messages, userMessage], userType, productData);
         }
       } else {
-        // Try web scraping for URLs even without AI
-        const urlMatch = userMessage.content.match(/https?:\/\/[^\s]+/g);
-        let urls = urlMatch as string[] | null;
-        if (!urls) {
-          const lower = userMessage.content.toLowerCase();
-          const brand = (lower.match(/apple|dell|hp|lenovo|asus|acer|msi|microsoft|samsung/) || [null])[0];
-          const intent = /(compare|latest|new|newest|best)/.test(lower);
-          if (brand && intent) {
-            try {
-              urls = await ProductDiscoveryService.discoverProductUrls(brand, 3, localStorage.getItem('tavily_api_key') || undefined);
-            } catch (e) {
-              console.warn('Discovery failed:', e);
-            }
-          }
-        }
-        const scrapingData = urls ? await tryWebScraping(urls) : undefined;
-        response = await generateChatResponse([...session.messages, userMessage], userType, scrapingData);
+        // Use product data even without AI API
+        response = await generateChatResponse([...session.messages, userMessage], userType, productData);
       }
       
       const assistantMessage: ChatMessageType = {
         id: `msg-${Date.now()}-ai`,
         role: 'assistant',
         content: response,
-        timestamp: new Date()
+        timestamp: new Date(),
+        products: productData && productData.length > 0 ? productData : undefined
       };
 
       setSession(prev => ({
