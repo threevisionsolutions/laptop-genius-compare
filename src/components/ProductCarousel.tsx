@@ -2,14 +2,7 @@ import React from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import {
-  Carousel,
-  CarouselContent,
-  CarouselItem,
-  CarouselNext,
-  CarouselPrevious,
-} from '@/components/ui/carousel';
-import { Star, ExternalLink, Cpu, HardDrive, Monitor, Battery } from 'lucide-react';
+import { Star, ExternalLink, Cpu, HardDrive, Monitor, Battery, ChevronLeft, ChevronRight } from 'lucide-react';
 import { LaptopSpecs } from '../types/laptop';
 
 interface ProductCarouselProps {
@@ -17,22 +10,36 @@ interface ProductCarouselProps {
 }
 
 const ProductCarousel: React.FC<ProductCarouselProps> = ({ products }) => {
+  const [currentIndex, setCurrentIndex] = React.useState(0);
+  const [showAll, setShowAll] = React.useState(false);
+
   if (!products || products.length === 0) {
     return null;
   }
 
+  const visibleProducts = showAll ? products : products.slice(0, 3);
+  const hasMore = products.length > 3;
+
   return (
-    <div className="w-full max-w-5xl mx-auto">
-      <div className="mb-4">
+    <div className="w-full max-w-6xl mx-auto">
+      <div className="mb-4 flex items-center justify-between">
         <h3 className="text-lg font-semibold text-foreground">
           Found {products.length} laptop{products.length !== 1 ? 's' : ''}:
         </h3>
+        {hasMore && (
+          <Button 
+            variant="outline" 
+            size="sm"
+            onClick={() => setShowAll(!showAll)}
+          >
+            {showAll ? 'Show Less' : `Show All ${products.length}`}
+          </Button>
+        )}
       </div>
       
-      <Carousel opts={{ align: "start" }} className="w-full">
-        <CarouselContent>
-          {products.map((laptop, index) => (
-            <CarouselItem key={`${laptop.id}-${index}`} className="md:basis-1/2 lg:basis-1/3">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {visibleProducts.map((laptop, index) => (
+          <div key={`${laptop.id}-${index}`} className="w-full">
               <Card className="h-full hover:shadow-lg transition-shadow">
                 <CardContent className="p-6">
                   {/* Product Image */}
@@ -132,22 +139,9 @@ const ProductCarousel: React.FC<ProductCarouselProps> = ({ products }) => {
                   </div>
                 </CardContent>
               </Card>
-            </CarouselItem>
-          ))}
-        </CarouselContent>
-        {products.length > 1 && (
-          <>
-            <CarouselPrevious />
-            <CarouselNext />
-          </>
-        )}
-      </Carousel>
-      
-      {products.length > 3 && (
-        <p className="text-xs text-muted-foreground mt-2 text-center">
-          Swipe or use arrows to see more products
-        </p>
-      )}
+          </div>
+        ))}
+      </div>
     </div>
   );
 };
