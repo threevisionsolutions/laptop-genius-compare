@@ -18,14 +18,12 @@ export class ProductDiscoveryService {
     const normalized = brand.toLowerCase();
     const domain = this.BRAND_DOMAINS[normalized] || `${normalized}.com`;
 
-    // Prefer Tavily when API key is available
-    if (tavilyApiKey) {
-      try {
-        const tavilyUrls = await TavilyService.searchBrandProductUrls(brand, tavilyApiKey, limit);
-        if (tavilyUrls.length) return tavilyUrls;
-      } catch (e) {
-        console.warn('Tavily discovery failed, falling back:', e);
-      }
+    // Try Tavily via proxy (uses server-side key). If a client key is provided, it will be used directly.
+    try {
+      const tavilyUrls = await TavilyService.searchBrandProductUrls(brand, tavilyApiKey, limit);
+      if (tavilyUrls.length) return tavilyUrls;
+    } catch (e) {
+      console.warn('Tavily discovery failed, falling back:', e);
     }
 
     // Try DuckDuckGo fallback

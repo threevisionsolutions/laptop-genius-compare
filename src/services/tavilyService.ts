@@ -7,6 +7,7 @@ export interface TavilyResult {
 
 export class TavilyService {
   private static readonly API_URL = 'https://api.tavily.com/search';
+  private static readonly PROXY_URL = '/functions/v1/tavily-search';
 
   static async search(query: string, apiKey: string, limit = 5, includeDomains?: string[]): Promise<TavilyResult[]> {
     if (!apiKey) throw new Error('Tavily API key is required');
@@ -45,13 +46,46 @@ export class TavilyService {
     return results;
   }
 
-  static async searchBrandProductUrls(brand: string, apiKey: string, limit = 3): Promise<string[]> {
+  static async searchProxy(query: string, limit = 5, includeDomains?: string[]): Promise<TavilyResult[]> {
+    const payload: any = {
+      query,
+      limit: Math.min(Math.max(limit, 1), 10),
+    };
+    if (includeDomains && includeDomains.length) {
+      payload.includeDomains = includeDomains;
+    }
+
+    const res = await fetch(this.PROXY_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+
+    if (!res.ok) {
+      const err = await res.text().catch(() => '');
+      throw new Error(`Tavily proxy failed: ${res.status} ${err}`);
+    }
+
+    const data = await res.json();
+    const results: TavilyResult[] = (data.results || []).map((r: any) => ({
+      title: r.title,
+      url: r.url,
+      content: r.content,
+      score: r.score,
+    }));
+
+    return results;
+  }
+
+  static async searchBrandProductUrls(brand: string, apiKey?: string, limit = 3): Promise<string[]> {
     const normalized = brand.toLowerCase();
     const domain = `${normalized}.com`;
     const query = `site:${domain} (laptop OR notebook) (buy OR product OR shop OR series)`;
 
     try {
-      const results = await this.search(query, apiKey, limit * 2, [domain]);
+      const results = apiKey
+        ? await this.search(query, apiKey, limit * 2, [domain])
+        : await this.searchProxy(query, limit * 2, [domain]);
       const urls = results
         .map(r => r.url)
         .filter(u => typeof u === 'string')
