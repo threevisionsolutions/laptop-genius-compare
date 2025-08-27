@@ -47,6 +47,7 @@ Deno.serve(async (req: Request) => {
 
     const search_depth: string = body.search_depth ?? "basic";
     const include_answer: boolean = body.include_answer ?? false;
+    const include_images: boolean = body.include_images ?? body.includeImages ?? true;
 
     if (!query || typeof query !== "string") {
       return new Response(JSON.stringify({ error: "Missing 'query'" }), {
@@ -60,6 +61,7 @@ Deno.serve(async (req: Request) => {
       query,
       search_depth,
       include_answer,
+      include_images,
       max_results: limit,
     };
     if (Array.isArray(includeDomains) && includeDomains.length) {

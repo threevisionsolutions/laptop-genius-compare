@@ -1,8 +1,12 @@
+import { ImprovedWebScrapingService } from './improvedWebScraping';
+import { MetaExtractor } from './metadataExtractor';
+
 export interface TavilyResult {
   title: string;
   url: string;
   content?: string;
   score?: number;
+  images?: string[];
 }
 
 export class TavilyService {
@@ -17,6 +21,7 @@ export class TavilyService {
       query,
       search_depth: 'basic',
       include_answer: false,
+      include_images: true,
       max_results: Math.min(Math.max(limit, 1), 10),
     };
 
@@ -41,6 +46,7 @@ export class TavilyService {
       url: r.url,
       content: r.content,
       score: r.score,
+      images: r.images,
     }));
 
     return results;
@@ -50,10 +56,11 @@ export class TavilyService {
     const payload: any = {
       query,
       limit: Math.min(Math.max(limit, 1), 10),
+      includeDomains: includeDomains && includeDomains.length ? includeDomains : undefined,
+      includeImages: true,
+      include_answer: false,
+      search_depth: 'basic',
     };
-    if (includeDomains && includeDomains.length) {
-      payload.includeDomains = includeDomains;
-    }
 
     const res = await fetch(this.PROXY_URL, {
       method: 'POST',
@@ -72,6 +79,7 @@ export class TavilyService {
       url: r.url,
       content: r.content,
       score: r.score,
+      images: r.images,
     }));
 
     return results;
@@ -99,5 +107,56 @@ export class TavilyService {
       console.warn('Tavily brand search failed:', e);
       return [];
     }
+  }
+
+  // Structured search: returns Gemini-friendly JSON with enriched product metadata
+  static async searchStructured(query: string, limit = 5, apiKey?: string): Promise<{
+    query: string;
+    fetchedAt: string;
+    products: Array<{
+      title: string;
+      url: string;
+      images: string[];
+      description?: string;
+      price?: { amount: number; currency: string };
+      brand?: string;
+      specs?: { cpu?: string; ram?: string; storage?: string; screen?: string; os?: string };
+      source?: { score?: number };
+    }>;
+  }> {
+    const results = apiKey
+      ? await this.search(query, apiKey, limit)
+      : await this.searchProxy(query, limit);
+
+    const products = await Promise.all(
+      results.map(async (r) => {
+        const [scraped, meta] = await Promise.all([
+          ImprovedWebScrapingService.scrapeLaptopFromUrl(r.url),
+          MetaExtractor.getPageMetadata(r.url),
+        ]);
+
+        const images = Array.from(new Set([...(r.images || []), ...(meta.images || [])])).slice(0, 6);
+        const title = scraped?.name || meta.title || r.title;
+        const description = meta.description || r.content;
+
+        const price = scraped?.price ? { amount: scraped.price, currency: scraped.currency } : undefined;
+        const specs = scraped
+          ? { cpu: scraped.cpu, ram: scraped.ram, storage: scraped.storage, screen: scraped.screen, os: scraped.os }
+          : undefined;
+
+        return {
+          title,
+          url: r.url,
+          images,
+          description,
+          price,
+          brand: scraped?.brand,
+          specs,
+          source: { score: r.score },
+        };
+      })
+    );
+
+    return { query, fetchedAt: new Date().toISOString(), products };
   }
 }
