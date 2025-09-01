@@ -101,10 +101,11 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ userType }) => {
     try {
       let response: string;
       
-      // Check if user message contains URLs or discover from brand intent
+      // Enhanced product discovery with structured data
       const urlMatch = userMessage.content.match(/https?:\/\/[^\s]+/g);
       let collectedUrls = urlMatch as string[] | null;
       let productData: any[] | undefined;
+      let structuredProducts: any = null;
 
       if (!collectedUrls) {
         const lower = userMessage.content.toLowerCase();
@@ -112,18 +113,45 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ userType }) => {
         const intent = /(compare|latest|new|newest|best|show|find|search)/.test(lower);
         if (brand && intent) {
           try {
-            collectedUrls = await ProductDiscoveryService.discoverProductUrls(brand, 3, localStorage.getItem('tavily_api_key') || undefined);
+            // Get structured product data optimized for Gemini
+            structuredProducts = await ProductDiscoveryService.discoverStructuredProducts(brand, 3, localStorage.getItem('tavily_api_key') || undefined);
+            console.log('Found structured products:', structuredProducts);
+            
+            // If we have Tavily structured data, use it directly
+            if (structuredProducts.source === 'tavily' && structuredProducts.products.length > 0) {
+              productData = structuredProducts.products.map((p: any) => ({
+                id: `structured-${Date.now()}-${Math.random()}`,
+                name: p.name || 'Unknown Model',
+                brand: p.brand || brand,
+                price: p.price || 0,
+                currency: '$',
+                cpu: p.specs?.cpu || 'Unknown CPU',
+                ram: p.specs?.ram || 'Unknown RAM',
+                storage: p.specs?.storage || 'Unknown Storage',
+                display: p.specs?.display || 'Unknown Display',
+                graphics: p.specs?.graphics || 'Integrated',
+                images: p.images || [],
+                description: p.description || '',
+                url: p.url || '',
+                availability: 'Available',
+                seller: p.source || 'Official Store',
+                rating: p.rating || 4.5
+              }));
+            } else if (structuredProducts.urls) {
+              // Fallback to URL-based discovery
+              collectedUrls = structuredProducts.urls;
+            }
           } catch (e) {
-            console.warn('Discovery failed:', e);
+            console.warn('Structured discovery failed:', e);
           }
         }
       }
 
-      // Try to get product data if we have URLs
-      if (collectedUrls && collectedUrls.length > 0) {
+      // Try to get product data from URLs if we don't have structured data
+      if (!productData && collectedUrls && collectedUrls.length > 0) {
         try {
           productData = await EnhancedLaptopService.searchLaptops(collectedUrls);
-          console.log('Found product data:', productData);
+          console.log('Found product data from URLs:', productData);
         } catch (error) {
           console.warn('Failed to get product data:', error);
         }
@@ -133,10 +161,42 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ userType }) => {
         
         let enhancedContent = userMessage.content;
         
+        // Create Gemini-optimized product data
         if (productData && productData.length > 0) {
-          enhancedContent += `\n\nI found ${productData.length} laptops that match your criteria. Here are the detailed specifications:\n${productData.map(laptop => 
-            `- ${laptop.name} by ${laptop.brand}: ${laptop.currency}${laptop.price} - ${laptop.cpu}, ${laptop.ram}, ${laptop.storage}`
-          ).join('\n')}`;
+          const geminiProductData = {
+            query: userMessage.content,
+            productCount: productData.length,
+            products: productData.map(laptop => ({
+              name: laptop.name,
+              brand: laptop.brand,
+              price: {
+                amount: laptop.price,
+                currency: laptop.currency || '$'
+              },
+              specifications: {
+                processor: laptop.cpu,
+                memory: laptop.ram,
+                storage: laptop.storage,
+                display: laptop.display || 'Standard',
+                graphics: laptop.graphics || 'Integrated'
+              },
+              features: {
+                rating: laptop.rating || 4.5,
+                availability: laptop.availability || 'Available',
+                seller: laptop.seller || 'Official Store'
+              },
+              images: laptop.images || [],
+              description: laptop.description || '',
+              url: laptop.url || ''
+            })),
+            source: structuredProducts?.source || 'web-scraping',
+            timestamp: new Date().toISOString()
+          };
+
+          enhancedContent += `\n\n**STRUCTURED PRODUCT DATA FOR AI ANALYSIS:**
+${JSON.stringify(geminiProductData, null, 2)}
+
+Please analyze these ${productData.length} laptops and provide detailed recommendations based on the user's query. Include comparisons, pros/cons, and specific use-case recommendations.`;
         }
         
         try {
@@ -178,7 +238,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ userType }) => {
           response = await generateChatResponse([...session.messages, userMessage], userType, productData);
         }
       } else {
-        // Try to get product data even without AI API - improve fallback for generic queries
+        // Enhanced fallback for generic queries using structured discovery
         if (!productData) {
           const lower = userMessage.content.toLowerCase();
           const brand = (lower.match(/apple|dell|hp|lenovo|asus|acer|msi|microsoft|samsung/) || [null])[0];
@@ -187,13 +247,34 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ userType }) => {
           if ((brand && intent) || lower.includes('laptop')) {
             try {
               const searchBrand = brand || 'apple'; // Default to apple if no specific brand
-              const urls = await ProductDiscoveryService.discoverProductUrls(searchBrand, 3, localStorage.getItem('tavily_api_key') || undefined);
-              if (urls.length > 0) {
-                productData = await EnhancedLaptopService.searchLaptops(urls);
-                console.log('Fallback: Found product data:', productData);
+              structuredProducts = await ProductDiscoveryService.discoverStructuredProducts(searchBrand, 3, localStorage.getItem('tavily_api_key') || undefined);
+              
+              if (structuredProducts.source === 'tavily' && structuredProducts.products.length > 0) {
+                productData = structuredProducts.products.map((p: any) => ({
+                  id: `fallback-${Date.now()}-${Math.random()}`,
+                  name: p.name || 'Unknown Model',
+                  brand: p.brand || searchBrand,
+                  price: p.price || 0,
+                  currency: '$',
+                  cpu: p.specs?.cpu || 'Unknown CPU',
+                  ram: p.specs?.ram || 'Unknown RAM',
+                  storage: p.specs?.storage || 'Unknown Storage',
+                  display: p.specs?.display || 'Unknown Display',
+                  graphics: p.specs?.graphics || 'Integrated',
+                  images: p.images || [],
+                  description: p.description || '',
+                  url: p.url || '',
+                  availability: 'Available',
+                  seller: p.source || 'Official Store',
+                  rating: p.rating || 4.5
+                }));
+                console.log('Fallback: Found structured product data:', productData);
+              } else if (structuredProducts.urls) {
+                productData = await EnhancedLaptopService.searchLaptops(structuredProducts.urls);
+                console.log('Fallback: Found URL-based product data:', productData);
               }
             } catch (e) {
-              console.warn('Fallback product discovery failed:', e);
+              console.warn('Enhanced fallback product discovery failed:', e);
             }
           }
         }

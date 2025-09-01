@@ -13,7 +13,38 @@ export class ProductDiscoveryService {
     samsung: 'samsung.com',
   };
 
-  // Discover top product URLs for a brand. Tries Tavily first (if key provided), then falls back to DuckDuckGo via AllOrigins.
+  // Enhanced product discovery that returns structured data optimized for Gemini
+  static async discoverStructuredProducts(brand: string, limit = 3, tavilyApiKey?: string): Promise<any> {
+    const normalized = brand.toLowerCase();
+    
+    // Try Tavily structured search first (optimized for AI processing)
+    try {
+      const query = `${brand} laptop specifications price features reviews`;
+      const structuredData = await TavilyService.searchStructured(query, limit, tavilyApiKey);
+      
+      if (structuredData && structuredData.products && structuredData.products.length > 0) {
+        console.log('Found structured Tavily data:', structuredData.products.length, 'products');
+        return {
+          source: 'tavily',
+          products: structuredData.products,
+          query: query
+        };
+      }
+    } catch (e) {
+      console.warn('Tavily structured search failed, falling back:', e);
+    }
+
+    // Fallback: get URLs and convert to structured format
+    const urls = await this.discoverProductUrls(brand, limit, tavilyApiKey);
+    return {
+      source: 'fallback',
+      products: [],
+      urls: urls,
+      query: `${brand} laptops`
+    };
+  }
+
+  // Original method for backward compatibility
   static async discoverProductUrls(brand: string, limit = 3, tavilyApiKey?: string): Promise<string[]> {
     const normalized = brand.toLowerCase();
     const domain = this.BRAND_DOMAINS[normalized] || `${normalized}.com`;
