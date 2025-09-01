@@ -42,17 +42,17 @@ const ProductCarousel: React.FC<ProductCarouselProps> = ({ products }) => {
           <div key={`${laptop.id}-${index}`} className="w-full">
               <Card className="h-full hover:shadow-lg transition-shadow">
                 <CardContent className="p-6">
-                  {/* Product Image */}
-                  <div className="aspect-video mb-4 bg-muted rounded-lg overflow-hidden">
-                    <img 
-                      src={laptop.image || '/placeholder.svg'} 
-                      alt={laptop.name}
-                      className="w-full h-full object-cover"
-                      onError={(e) => {
-                        (e.target as HTMLImageElement).src = '/placeholder.svg';
-                      }}
-                    />
-                  </div>
+                   {/* Product Image */}
+                   <div className="aspect-video mb-4 bg-muted rounded-lg overflow-hidden">
+                     <img 
+                       src={laptop.image || (laptop.images && laptop.images[0]) || '/placeholder.svg'} 
+                       alt={laptop.name}
+                       className="w-full h-full object-cover"
+                       onError={(e) => {
+                         (e.target as HTMLImageElement).src = '/placeholder.svg';
+                       }}
+                     />
+                   </div>
 
                   {/* Product Info */}
                   <div className="space-y-3">

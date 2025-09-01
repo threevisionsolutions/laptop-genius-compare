@@ -6,6 +6,7 @@ export interface LaptopSpecs {
   price: number;
   currency: string;
   image: string;
+  images?: string[]; // Optional array of images
   cpu: string;
   ram: string;
   storage: string;

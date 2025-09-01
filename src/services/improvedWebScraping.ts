@@ -217,7 +217,7 @@ export class ImprovedWebScrapingService {
       brand: data.brand || 'Unknown',
       price: data.price || 0,
       currency: data.currency || '$',
-      image: '/placeholder.svg',
+      image: data.image || '/placeholder.svg',
       cpu: data.cpu || 'Not specified',
       ram: data.ram || 'Not specified',
       storage: data.storage || 'Not specified',
@@ -234,31 +234,67 @@ export class ImprovedWebScrapingService {
   }
 
   private static generateMockData(url: string): LaptopSpecs {
-    // Generate realistic mock data for demo
-    const brands = ['Dell', 'HP', 'Lenovo', 'ASUS', 'Apple'];
-    const cpus = ['Intel Core i5-1235U', 'Intel Core i7-1355U', 'AMD Ryzen 5 7530U', 'Apple M2'];
-    const rams = ['8GB DDR4', '16GB DDR4', '8GB Unified Memory', '16GB LPDDR5'];
+    // Generate brand-safe mock data based on URL
+    const detectedBrand = this.extractBrand(url, '');
+    
+    // Brand-specific configurations
+    const brandConfigs: Record<string, { cpus: string[], rams: string[], models: string[] }> = {
+      'Dell': {
+        cpus: ['Intel Core i5-1340P', 'Intel Core i7-1360P', 'AMD Ryzen 7 7730U'],
+        rams: ['8GB DDR4', '16GB DDR4', '32GB DDR4'],
+        models: ['XPS 13', 'Inspiron 15', 'Latitude 5530', 'Precision 3570']
+      },
+      'Apple': {
+        cpus: ['Apple M2', 'Apple M2 Pro', 'Apple M2 Max'],
+        rams: ['8GB Unified Memory', '16GB Unified Memory', '32GB Unified Memory'],
+        models: ['MacBook Air', 'MacBook Pro 14"', 'MacBook Pro 16"']
+      },
+      'HP': {
+        cpus: ['Intel Core i5-1235U', 'Intel Core i7-1355U', 'AMD Ryzen 5 7530U'],
+        rams: ['8GB DDR4', '16GB DDR4', '32GB DDR4'],
+        models: ['Pavilion 15', 'Envy x360', 'Spectre x360', 'EliteBook 850']
+      },
+      'Lenovo': {
+        cpus: ['Intel Core i5-1335U', 'Intel Core i7-1365U', 'AMD Ryzen 7 7730U'],
+        rams: ['8GB DDR4', '16GB DDR4', '32GB LPDDR5'],
+        models: ['ThinkPad X1 Carbon', 'IdeaPad 5', 'Yoga 7i', 'Legion 5']
+      }
+    };
+    
+    const config = brandConfigs[detectedBrand] || brandConfigs['Dell'];
     const storages = ['256GB SSD', '512GB SSD', '1TB SSD'];
     
-    const brand = brands[Math.floor(Math.random() * brands.length)];
-    const cpu = cpus[Math.floor(Math.random() * cpus.length)];
-    const ram = rams[Math.floor(Math.random() * rams.length)];
+    const cpu = config.cpus[Math.floor(Math.random() * config.cpus.length)];
+    const ram = config.rams[Math.floor(Math.random() * config.rams.length)];
     const storage = storages[Math.floor(Math.random() * storages.length)];
+    const model = config.models[Math.floor(Math.random() * config.models.length)];
+    
+    // Brand-appropriate pricing
+    const priceRanges: Record<string, [number, number]> = {
+      'Apple': [999, 2499],
+      'Dell': [599, 1899],
+      'HP': [549, 1699],
+      'Lenovo': [599, 1799],
+      'ASUS': [549, 1599]
+    };
+    
+    const [minPrice, maxPrice] = priceRanges[detectedBrand] || [599, 1499];
+    const price = Math.floor(Math.random() * (maxPrice - minPrice)) + minPrice;
     
     return {
       id: this.generateIdFromUrl(url),
-      name: `${brand} Laptop (Web Scraped)`,
-      brand,
-      price: Math.floor(Math.random() * 1500) + 500,
+      name: `${detectedBrand} ${model}`,
+      brand: detectedBrand,
+      price,
       currency: '$',
       image: '/placeholder.svg',
       cpu,
       ram,
       storage,
-      screen: '14" FHD Display',
-      battery: 'Up to 8 hours',
-      weight: '3.2 lbs',
-      os: brand === 'Apple' ? 'macOS' : 'Windows 11',
+      screen: detectedBrand === 'Apple' ? '13.6" Liquid Retina' : '14" FHD Display',
+      battery: detectedBrand === 'Apple' ? 'Up to 18 hours' : 'Up to 8 hours',
+      weight: detectedBrand === 'Apple' ? '2.7 lbs' : '3.2 lbs',
+      os: detectedBrand === 'Apple' ? 'macOS' : 'Windows 11',
       rating: 4.0 + Math.random(),
       reviewCount: Math.floor(Math.random() * 500) + 100,
       seller: this.extractSellerFromUrl(url),

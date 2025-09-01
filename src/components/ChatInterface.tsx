@@ -117,26 +117,32 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ userType }) => {
             structuredProducts = await ProductDiscoveryService.discoverStructuredProducts(brand, 3, localStorage.getItem('tavily_api_key') || undefined);
             console.log('Found structured products:', structuredProducts);
             
-            // If we have Tavily structured data, use it directly
-            if (structuredProducts.source === 'tavily' && structuredProducts.products.length > 0) {
-              productData = structuredProducts.products.map((p: any) => ({
-                id: `structured-${Date.now()}-${Math.random()}`,
-                name: p.name || 'Unknown Model',
-                brand: p.brand || brand,
-                price: p.price || 0,
-                currency: '$',
-                cpu: p.specs?.cpu || 'Unknown CPU',
-                ram: p.specs?.ram || 'Unknown RAM',
-                storage: p.specs?.storage || 'Unknown Storage',
-                display: p.specs?.display || 'Unknown Display',
-                graphics: p.specs?.graphics || 'Integrated',
-                images: p.images || [],
-                description: p.description || '',
-                url: p.url || '',
-                availability: 'Available',
-                seller: p.source || 'Official Store',
-                rating: p.rating || 4.5
-              }));
+              // If we have Tavily structured data, use it directly
+              if (structuredProducts.source === 'tavily' && structuredProducts.products.length > 0) {
+                productData = structuredProducts.products.map((p: any) => ({
+                  id: `structured-${Date.now()}-${Math.random()}`,
+                  name: p.title || p.name || 'Unknown Model',
+                  brand: p.brand || brand,
+                  price: p.price?.amount || 0,
+                  currency: p.price?.currency || '$',
+                  image: p.images?.[0] || '/placeholder.svg',
+                  images: p.images || [],
+                  cpu: p.specs?.cpu || 'Unknown CPU',
+                  ram: p.specs?.ram || 'Unknown RAM',
+                  storage: p.specs?.storage || 'Unknown Storage',
+                  screen: p.specs?.screen || 'Unknown Display',
+                  battery: 'Not specified',
+                  weight: 'Not specified',
+                  os: p.specs?.os || 'Windows 11', 
+                  rating: 4.2,
+                  reviewCount: 150,
+                  seller: p.url?.includes('amazon') ? 'Amazon' : 
+                         p.url?.includes('bestbuy') ? 'Best Buy' :
+                         p.url?.includes('dell.com') ? 'Dell' :
+                         p.url?.includes('apple.com') ? 'Apple' : 'Official Store',
+                  availability: 'Available Online',
+                  url: p.url || ''
+                }));
             } else if (structuredProducts.urls) {
               // Fallback to URL-based discovery
               collectedUrls = structuredProducts.urls;
@@ -252,21 +258,27 @@ Please analyze these ${productData.length} laptops and provide detailed recommen
               if (structuredProducts.source === 'tavily' && structuredProducts.products.length > 0) {
                 productData = structuredProducts.products.map((p: any) => ({
                   id: `fallback-${Date.now()}-${Math.random()}`,
-                  name: p.name || 'Unknown Model',
+                  name: p.title || p.name || 'Unknown Model',
                   brand: p.brand || searchBrand,
-                  price: p.price || 0,
-                  currency: '$',
+                  price: p.price?.amount || 0,
+                  currency: p.price?.currency || '$',
+                  image: p.images?.[0] || '/placeholder.svg',
+                  images: p.images || [],
                   cpu: p.specs?.cpu || 'Unknown CPU',
                   ram: p.specs?.ram || 'Unknown RAM',
                   storage: p.specs?.storage || 'Unknown Storage',
-                  display: p.specs?.display || 'Unknown Display',
-                  graphics: p.specs?.graphics || 'Integrated',
-                  images: p.images || [],
-                  description: p.description || '',
-                  url: p.url || '',
-                  availability: 'Available',
-                  seller: p.source || 'Official Store',
-                  rating: p.rating || 4.5
+                  screen: p.specs?.screen || 'Unknown Display',
+                  battery: 'Not specified',
+                  weight: 'Not specified',
+                  os: p.specs?.os || 'Windows 11',
+                  rating: 4.2,
+                  reviewCount: 150,
+                  seller: p.url?.includes('amazon') ? 'Amazon' : 
+                         p.url?.includes('bestbuy') ? 'Best Buy' :
+                         p.url?.includes('dell.com') ? 'Dell' :
+                         p.url?.includes('apple.com') ? 'Apple' : 'Official Store',
+                  availability: 'Available Online',
+                  url: p.url || ''
                 }));
                 console.log('Fallback: Found structured product data:', productData);
               } else if (structuredProducts.urls) {

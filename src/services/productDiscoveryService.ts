@@ -15,26 +15,48 @@ export class ProductDiscoveryService {
 
   // Enhanced product discovery that returns structured data optimized for Gemini
   static async discoverStructuredProducts(brand: string, limit = 3, tavilyApiKey?: string): Promise<any> {
-    const normalized = brand.toLowerCase();
+    console.log(`🔍 Discovering structured products for: ${brand}`);
     
-    // Try Tavily structured search first (optimized for AI processing)
     try {
-      const query = `${brand} laptop specifications price features reviews`;
+      // Enhanced query with brand-specific terms
+      const brandTerms = this.getBrandSpecificTerms(brand);
+      const query = `${brand} ${brandTerms} laptop 2024 gaming business ultrabook specs price reviews`;
+      
+      console.log(`🎯 Using enhanced query: "${query}"`);
       const structuredData = await TavilyService.searchStructured(query, limit, tavilyApiKey);
       
       if (structuredData && structuredData.products && structuredData.products.length > 0) {
-        console.log('Found structured Tavily data:', structuredData.products.length, 'products');
-        return {
-          source: 'tavily',
-          products: structuredData.products,
-          query: query
-        };
+        // Filter products to ensure brand match
+        const brandFilteredProducts = structuredData.products.filter((product: any) => {
+          const productBrand = product.brand?.toLowerCase() || '';
+          const productTitle = product.title?.toLowerCase() || '';
+          const productUrl = product.url?.toLowerCase() || '';
+          const requestedBrand = brand.toLowerCase();
+          
+          return productBrand.includes(requestedBrand) || 
+                 productTitle.includes(requestedBrand) ||
+                 productUrl.includes(requestedBrand) ||
+                 this.matchesBrandKeywords(productTitle, brand);
+        });
+        
+        console.log(`✅ Found ${brandFilteredProducts.length}/${structuredData.products.length} brand-matched products from Tavily`);
+        
+        if (brandFilteredProducts.length > 0) {
+          return {
+            source: 'tavily',
+            products: brandFilteredProducts,
+            query: query
+          };
+        }
+        
+        console.log('⚠️ No brand-matched products found, falling back');
       }
     } catch (e) {
-      console.warn('Tavily structured search failed, falling back:', e);
+      console.warn('❌ Tavily structured search failed:', e);
     }
 
     // Fallback: get URLs and convert to structured format
+    console.log('🔄 Falling back to URL discovery method');
     const urls = await this.discoverProductUrls(brand, limit, tavilyApiKey);
     return {
       source: 'fallback',
@@ -42,6 +64,35 @@ export class ProductDiscoveryService {
       urls: urls,
       query: `${brand} laptops`
     };
+  }
+
+  private static getBrandSpecificTerms(brand: string): string {
+    const brandTerms: Record<string, string> = {
+      'dell': 'XPS Inspiron Alienware gaming business',
+      'apple': 'MacBook Pro Air M2 M3',
+      'hp': 'Pavilion Envy Spectre EliteBook gaming',
+      'lenovo': 'ThinkPad IdeaPad Yoga Legion gaming',
+      'asus': 'ZenBook VivoBook ROG gaming TUF',
+      'acer': 'Aspire Swift Predator Nitro gaming',
+      'msi': 'Gaming Creator Modern Prestige'
+    };
+    
+    return brandTerms[brand.toLowerCase()] || '';
+  }
+
+  private static matchesBrandKeywords(title: string, brand: string): boolean {
+    const brandKeywords: Record<string, string[]> = {
+      'dell': ['xps', 'inspiron', 'alienware', 'latitude', 'precision'],
+      'apple': ['macbook', 'mac'],
+      'hp': ['pavilion', 'envy', 'spectre', 'elitebook', 'omen'],
+      'lenovo': ['thinkpad', 'ideapad', 'yoga', 'legion'],
+      'asus': ['zenbook', 'vivobook', 'rog', 'tuf'],
+      'acer': ['aspire', 'swift', 'predator', 'nitro'],
+      'msi': ['gaming', 'creator', 'modern', 'prestige']
+    };
+    
+    const keywords = brandKeywords[brand.toLowerCase()] || [];
+    return keywords.some(keyword => title.includes(keyword));
   }
 
   // Original method for backward compatibility
