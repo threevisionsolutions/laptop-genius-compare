@@ -110,10 +110,17 @@ const ProductCarousel: React.FC<ProductCarouselProps> = ({ products }) => {
                       </div>
                     </div>
 
-                    {/* Storage Info */}
-                    <div className="text-sm text-muted-foreground">
-                      <strong>Storage:</strong> {laptop.storage}
-                    </div>
+                     {/* Storage Info */}
+                     <div className="text-sm text-muted-foreground">
+                       <strong>Storage:</strong> {laptop.storage}
+                     </div>
+
+                     {/* Description if available */}
+                     {laptop.name && laptop.name.length > 50 && (
+                       <div className="text-xs text-muted-foreground line-clamp-2">
+                         {laptop.name}
+                       </div>
+                     )}
 
                     {/* Availability */}
                     <div className="flex items-center justify-between text-xs">

@@ -193,6 +193,15 @@ export class TavilyService {
           ? { cpu: scraped.cpu, ram: scraped.ram, storage: scraped.storage, screen: scraped.screen, os: scraped.os }
           : undefined;
 
+        // Extract rating from content or use default
+        const ratingMatch = (r.content || '').match(/(\d\.?\d?)\s*\/?\s*5?\s*stars?/i) || 
+                           (r.content || '').match(/rating[:\s]*(\d\.?\d?)/i);
+        const rating = ratingMatch ? parseFloat(ratingMatch[1]) : (scraped?.rating || 4.2);
+
+        // Extract review count from content
+        const reviewMatch = (r.content || '').match(/(\d+)\s*reviews?/i);
+        const reviewCount = reviewMatch ? parseInt(reviewMatch[1]) : 150;
+
         // Extract brand from URL if not found in scraped data
         const brand = scraped?.brand || this.extractBrandFromUrl(r.url) || detectedBrand;
 
@@ -204,6 +213,8 @@ export class TavilyService {
           price,
           brand,
           specs,
+          rating,
+          reviewCount,
           source: { score: r.score },
         };
       })

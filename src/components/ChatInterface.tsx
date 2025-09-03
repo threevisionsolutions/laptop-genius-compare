@@ -134,8 +134,8 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ userType }) => {
                   battery: 'Not specified',
                   weight: 'Not specified',
                   os: p.specs?.os || 'Windows 11', 
-                  rating: 4.2,
-                  reviewCount: 150,
+                  rating: p.rating || 4.2,
+                  reviewCount: p.reviewCount || 150,
                   seller: p.url?.includes('amazon') ? 'Amazon' : 
                          p.url?.includes('bestbuy') ? 'Best Buy' :
                          p.url?.includes('dell.com') ? 'Dell' :
@@ -271,8 +271,8 @@ Please analyze these ${productData.length} laptops and provide detailed recommen
                   battery: 'Not specified',
                   weight: 'Not specified',
                   os: p.specs?.os || 'Windows 11',
-                  rating: 4.2,
-                  reviewCount: 150,
+                  rating: p.rating || 4.2,
+                  reviewCount: p.reviewCount || 150,
                   seller: p.url?.includes('amazon') ? 'Amazon' : 
                          p.url?.includes('bestbuy') ? 'Best Buy' :
                          p.url?.includes('dell.com') ? 'Dell' :
