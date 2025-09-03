@@ -81,7 +81,11 @@ export class TavilyService {
         throw new Error(`Tavily proxy failed: ${res.status} ${err}`);
       }
 
-      const data = await res.json();
+      const data = await res.json().catch(() => {
+        // If JSON parsing fails, log the response and throw a descriptive error
+        console.warn('Tavily proxy returned non-JSON response, likely HTML error page');
+        throw new Error('Tavily proxy returned HTML instead of JSON - service may be unavailable');
+      });
       const results: TavilyResult[] = (data.results || []).map((r: any) => ({
         title: r.title,
         url: r.url,

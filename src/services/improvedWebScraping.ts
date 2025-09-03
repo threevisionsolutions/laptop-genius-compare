@@ -47,7 +47,24 @@ export class ImprovedWebScrapingService {
     const data: any = {};
     const lowerContent = content.toLowerCase();
 
-    // Extract title/name with multiple patterns
+    // Extract images from content
+    const imageMatch = content.match(/<img[^>]*src=['"]([^'"]+)['"][^>]*>/gi);
+    if (imageMatch && imageMatch.length > 0) {
+      const imageSrc = imageMatch[0].match(/src=['"]([^'"]+)['"]/i);
+      if (imageSrc && imageSrc[1]) {
+        try {
+          const imageUrl = new URL(imageSrc[1], url).toString();
+          data.image = imageUrl;
+        } catch {
+          // If URL construction fails, try to get a brand-appropriate image
+          data.image = this.getBrandImage(data.brand || this.extractBrand(url, content));
+        }
+      }
+    }
+
+    if (!data.image) {
+      data.image = this.getBrandImage(data.brand || this.extractBrand(url, content));
+    }
     const titlePatterns = [
       /<title[^>]*>([^<]*laptop[^<]*)/i,
       /<h1[^>]*>([^<]*laptop[^<]*)/i,
@@ -217,7 +234,7 @@ export class ImprovedWebScrapingService {
       brand: data.brand || 'Unknown',
       price: data.price || 0,
       currency: data.currency || '$',
-      image: data.image || '/placeholder.svg',
+      image: data.image || this.getBrandImage(data.brand || 'Dell'),
       cpu: data.cpu || 'Not specified',
       ram: data.ram || 'Not specified',
       storage: data.storage || 'Not specified',
@@ -287,7 +304,7 @@ export class ImprovedWebScrapingService {
       brand: detectedBrand,
       price,
       currency: '$',
-      image: '/placeholder.svg',
+      image: this.getBrandImage(detectedBrand),
       cpu,
       ram,
       storage,
@@ -330,6 +347,21 @@ export class ImprovedWebScrapingService {
     } catch {
       return 'Unknown Store';
     }
+  }
+
+  private static getBrandImage(brand: string): string {
+    const brandImages: Record<string, string> = {
+      'Apple': 'https://store.storeimages.cdn-apple.com/4982/as-images.apple.com/is/macbook-air-midnight-select-20220606',
+      'Dell': 'https://i.dell.com/is/image/DellContent/content/dam/ss2/product-images/dell-client-products/notebooks/xps-notebooks/13-9315/media-gallery/xs9315-cnb-00000ff090-gy.psd',
+      'HP': 'https://ssl-product-images.www8-hp.com/digmedialib/prodimg/lowres/c07929143.png',
+      'Lenovo': 'https://psref.lenovo.com/images/products/ThinkPad_X1_Carbon_Gen_11.png',
+      'ASUS': 'https://dlcdnwebimgs.asus.com/gain/319D3969-6292-4C76-A571-C76C5B4EC1F1/w800/h450',
+      'Acer': 'https://static.acer.com/up/Resource/Acer/Laptops/Swift_3/Images/20220321/Acer-Swift3-SF314-512-gallery-01.png',
+      'MSI': 'https://asset.msi.com/resize/image/global/product/product_1644834398c4c42fab070cf998d19362002869808d.png62405b38c58fe0f07fcef2367d8a9ba1/1024.png',
+      'Microsoft': 'https://img-prod-cms-rt-microsoft-com.akamaized.net/cms/api/am/imageFileData/RE4LqQX'
+    };
+    
+    return brandImages[brand] || brandImages['Dell'];
   }
 
   static validateLaptopUrl(url: string): boolean {
