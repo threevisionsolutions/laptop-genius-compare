@@ -81,9 +81,14 @@ export class TavilyService {
         throw new Error(`Tavily proxy failed: ${res.status} ${err}`);
       }
 
-      const data = await res.json().catch(() => {
+      const data = await res.json().catch(async (jsonError) => {
         // If JSON parsing fails, log the response and throw a descriptive error
-        console.warn('Tavily proxy returned non-JSON response, likely HTML error page');
+        const responseText = await res.text().catch(() => 'Unable to read response');
+        console.warn('Tavily proxy returned non-JSON response:', {
+          status: res.status,
+          statusText: res.statusText,
+          responsePreview: responseText.substring(0, 200)
+        });
         throw new Error('Tavily proxy returned HTML instead of JSON - service may be unavailable');
       });
       const results: TavilyResult[] = (data.results || []).map((r: any) => ({
@@ -99,9 +104,16 @@ export class TavilyService {
       // If proxy fails and we have API key, try direct API as fallback
       if (apiKey) {
         console.log('Proxy error, falling back to direct Tavily API:', error);
-        return await this.search(query, apiKey, limit, includeDomains);
+        try {
+          return await this.search(query, apiKey, limit, includeDomains);
+        } catch (directApiError) {
+          console.error('Direct API also failed:', directApiError);
+          // Return empty results instead of throwing
+          return [];
+        }
       }
-      throw error;
+      console.error('Tavily search completely failed:', error);
+      return []; // Return empty array instead of throwing
     }
   }
 

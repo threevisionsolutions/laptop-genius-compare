@@ -13,13 +13,19 @@ export class ImprovedWebScrapingService {
     try {
       console.log(`Scraping laptop data from: ${url}`);
       
-      // Use CORS proxy to fetch the content
+      // Use CORS proxy to fetch the content with timeout
       const proxyUrl = this.CORS_PROXY + encodeURIComponent(url);
-      const response = await fetch(proxyUrl);
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+      
+      const response = await fetch(proxyUrl, {
+        signal: controller.signal
+      });
+      clearTimeout(timeoutId);
       
       if (!response.ok) {
         console.warn(`Failed to fetch ${url}: ${response.status}`);
-        return null;
+        return this.generateMockData(url);
       }
 
       const data = await response.json();
@@ -29,8 +35,8 @@ export class ImprovedWebScrapingService {
       const laptopData = this.parseContent(content, url);
       
       if (!laptopData) {
-        console.warn(`Could not extract laptop data from ${url}`);
-        return null;
+        console.warn(`Could not extract laptop data from ${url}, using mock data`);
+        return this.generateMockData(url);
       }
 
       // Convert to LaptopSpecs format
@@ -38,7 +44,7 @@ export class ImprovedWebScrapingService {
       
     } catch (error) {
       console.error(`Error scraping ${url}:`, error);
-      // Fallback to mock data for demo purposes
+      // Always return mock data instead of null
       return this.generateMockData(url);
     }
   }
@@ -250,7 +256,7 @@ export class ImprovedWebScrapingService {
     };
   }
 
-  private static generateMockData(url: string): LaptopSpecs {
+  public static generateMockData(url: string): LaptopSpecs {
     // Generate brand-safe mock data based on URL
     const detectedBrand = this.extractBrand(url, '');
     
