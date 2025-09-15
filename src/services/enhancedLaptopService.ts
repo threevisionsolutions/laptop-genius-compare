@@ -2,6 +2,7 @@ import { LaptopSpecs } from '../types/laptop';
 import { WebScrapingService } from './webScrapingService';
 import { ImprovedWebScrapingService } from './improvedWebScraping';
 import { generateOpenAIResponse } from './openaiService';
+import { RealDataService } from './realDataService';
 
 // Enhanced mock data with more realistic specs
 const mockLaptops: Record<string, LaptopSpecs> = {
@@ -11,7 +12,7 @@ const mockLaptops: Record<string, LaptopSpecs> = {
     brand: 'Apple',
     price: 1099,
     currency: '$',
-    image: '/placeholder.svg',
+    image: 'https://images.unsplash.com/photo-1541807084-5c52b6b3adef?w=400&h=300&fit=crop&auto=format',
     cpu: 'Apple M2 8-core CPU',
     ram: '8GB Unified Memory',
     storage: '256GB SSD',
@@ -31,7 +32,7 @@ const mockLaptops: Record<string, LaptopSpecs> = {
     brand: 'Dell',
     price: 1299,
     currency: '$',
-    image: '/placeholder.svg',
+    image: 'https://images.unsplash.com/photo-1588872657578-7efd1f1555ed?w=400&h=300&fit=crop&auto=format',
     cpu: 'Intel Core i7-1260P',
     ram: '16GB LPDDR5',
     storage: '512GB PCIe NVMe SSD',
@@ -51,7 +52,7 @@ const mockLaptops: Record<string, LaptopSpecs> = {
     brand: 'Lenovo',
     price: 1449,
     currency: '$',
-    image: '/placeholder.svg',
+    image: 'https://images.unsplash.com/photo-1496181133206-80ce9b88a853?w=400&h=300&fit=crop&auto=format',
     cpu: 'Intel Core i7-1365U vPro',
     ram: '16GB LPDDR5',
     storage: '512GB PCIe Gen4 SSD',
@@ -71,7 +72,7 @@ const mockLaptops: Record<string, LaptopSpecs> = {
     brand: 'ASUS',
     price: 899,
     currency: '$',
-    image: '/placeholder.svg',
+    image: 'https://images.unsplash.com/photo-1593642632823-8f785ba67e45?w=400&h=300&fit=crop&auto=format',
     cpu: 'AMD Ryzen 7 5825U',
     ram: '16GB DDR4',
     storage: '512GB PCIe SSD',
@@ -91,7 +92,7 @@ const mockLaptops: Record<string, LaptopSpecs> = {
     brand: 'Apple',
     price: 1999,
     currency: '$',
-    image: '/placeholder.svg',
+    image: 'https://images.unsplash.com/photo-1541807084-5c52b6b3adef?w=400&h=300&fit=crop&auto=format',
     cpu: 'Apple M2 Pro 10-core CPU',
     ram: '16GB Unified Memory',
     storage: '512GB SSD',
@@ -111,7 +112,7 @@ const mockLaptops: Record<string, LaptopSpecs> = {
     brand: 'HP',
     price: 1199,
     currency: '$',
-    image: '/placeholder.svg',
+    image: 'https://images.unsplash.com/photo-1496181133206-80ce9b88a853?w=400&h=300&fit=crop&auto=format',
     cpu: 'Intel Core i7-1255U',
     ram: '16GB LPDDR4x',
     storage: '512GB PCIe NVMe SSD',
@@ -139,47 +140,76 @@ interface SearchQuery {
 export class EnhancedLaptopService {
   
   static async searchLaptops(queries: string[], userType?: string): Promise<LaptopSpecs[]> {
-    console.log('Enhanced search with queries:', queries);
+    console.log('🚀 Enhanced search with queries:', queries);
     
     const results: LaptopSpecs[] = [];
-    const processedQueries = queries.map(q => this.parseQuery(q));
     
-    for (let i = 0; i < processedQueries.length; i++) {
-      const query = processedQueries[i];
-      let laptop: LaptopSpecs | null = null;
+    // First priority: Try to fetch real data for each query
+    for (let i = 0; i < queries.length; i++) {
+      const query = queries[i];
+      console.log(`🔍 Processing query ${i + 1}/${queries.length}: ${query}`);
       
-      if (query.isUrl) {
-        // Try to scrape the URL
-        laptop = await this.scrapeLaptopFromUrl(query.original);
-        if (!laptop) {
-          console.warn(`Failed to scrape ${query.original}, falling back to mock data`);
-          laptop = this.findBestMockMatch(query);
+      try {
+        // Attempt to fetch real data
+        const realData = await RealDataService.fetchRealLaptopData(query);
+        
+        if (realData && realData.length > 0) {
+          console.log(`✅ Found ${realData.length} real results for: ${query}`);
+          
+          // Add unique results to avoid duplicates
+          realData.forEach((laptop, index) => {
+            const uniqueLaptop = {
+              ...laptop,
+              id: `${laptop.id}-real-${i}-${index}`,
+              url: this.isValidUrl(query) ? query : laptop.url
+            };
+            results.push(uniqueLaptop);
+          });
+        } else {
+          console.log(`⚠️ No real data found for: ${query}, trying mock fallback`);
+          
+          // Fallback to enhanced mock matching
+          const parsedQuery = this.parseQuery(query);
+          const mockLaptop = this.findBestMockMatch(parsedQuery);
+          
+          if (mockLaptop) {
+            const uniqueLaptop = {
+              ...mockLaptop,
+              id: `${mockLaptop.id}-mock-${i}`,
+              url: this.isValidUrl(query) ? query : mockLaptop.url
+            };
+            results.push(uniqueLaptop);
+            console.log(`📋 Used mock data for: ${mockLaptop.name}`);
+          }
         }
-      } else {
-        // Search in mock data with enhanced matching
-        laptop = this.findBestMockMatch(query);
-      }
-      
-      if (laptop) {
-        // Ensure unique ID for comparison
-        const uniqueLaptop = {
-          ...laptop,
-          id: `${laptop.id}-${i}`,
-          url: query.original
-        };
-        results.push(uniqueLaptop);
+      } catch (error) {
+        console.error(`❌ Error processing query "${query}":`, error);
+        
+        // Emergency fallback to mock data
+        const parsedQuery = this.parseQuery(query);
+        const mockLaptop = this.findBestMockMatch(parsedQuery);
+        if (mockLaptop) {
+          results.push({
+            ...mockLaptop,
+            id: `${mockLaptop.id}-emergency-${i}`,
+            url: this.isValidUrl(query) ? query : mockLaptop.url
+          });
+        }
       }
     }
     
-    // If no results found, provide some default recommendations
+    // If still no results, provide some default recommendations
     if (results.length === 0) {
-      console.log('No matches found, providing default recommendations');
+      console.log('📋 No results found anywhere, providing default recommendations');
       const defaultLaptops = Object.values(mockLaptops).slice(0, Math.min(3, queries.length));
       results.push(...defaultLaptops.map((laptop, index) => ({
         ...laptop,
         id: `${laptop.id}-default-${index}`
       })));
     }
+    
+    console.log(`📊 Search complete. Returning ${results.length} results`);
+    console.log('Results summary:', results.map(r => ({ name: r.name, source: r.id.includes('real') ? 'REAL' : 'MOCK' })));
     
     return results;
   }

@@ -6,6 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Search, Plus, X, Filter } from 'lucide-react';
 import SearchAutocomplete from './SearchAutocomplete';
 import FilterPanel from './FilterPanel';
+import ApiKeyManager from './ApiKeyManager';
 
 interface FilterState {
   priceRange: [number, number];
@@ -15,7 +16,7 @@ interface FilterState {
 }
 
 interface SearchFormProps {
-  onCompare: (urls: string[], userType: string, filters?: FilterState) => void;
+  onCompare: (urls: string[], userType: string, filters?: FilterState, apiKey?: string) => void;
   loading: boolean;
 }
 
@@ -29,6 +30,7 @@ const SearchForm: React.FC<SearchFormProps> = ({ onCompare, loading }) => {
     minRating: 0,
     userType: ''
   });
+  const [apiKey, setApiKey] = useState('');
 
   const addUrlField = () => {
     if (urls.length < 4) {
@@ -60,8 +62,8 @@ const SearchForm: React.FC<SearchFormProps> = ({ onCompare, loading }) => {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const validUrls = urls.filter(url => url.trim());
-    if (validUrls.length >= 2) {
-      onCompare(validUrls, userType || filters.userType, filters);
+    if (validUrls.length >= 1) { // Allow single laptop analysis
+      onCompare(validUrls, userType || filters.userType, filters, apiKey);
     }
   };
 
@@ -147,7 +149,7 @@ const SearchForm: React.FC<SearchFormProps> = ({ onCompare, loading }) => {
           <Button 
             type="submit" 
             className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
-            disabled={loading || urls.filter(url => url.trim()).length < 2}
+            disabled={loading || urls.filter(url => url.trim()).length < 1}
           >
             {loading ? (
               <>
@@ -171,6 +173,11 @@ const SearchForm: React.FC<SearchFormProps> = ({ onCompare, loading }) => {
           onClearFilters={clearFilters}
         />
       )}
+      
+      <ApiKeyManager 
+        onApiKeyChange={setApiKey}
+        className="mt-4"
+      />
     </div>
   );
 };

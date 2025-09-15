@@ -7,6 +7,7 @@ import { LaptopSpecs } from '../types/laptop';
 import { Share, BookmarkIcon } from 'lucide-react';
 import SpecsChart from './SpecsChart';
 import ExportShare from './ExportShare';
+import DataSourceIndicator from './DataSourceIndicator';
 
 interface ComparisonTableProps {
   laptops: LaptopSpecs[];
@@ -73,6 +74,10 @@ const ComparisonTable: React.FC<ComparisonTableProps> = ({ laptops, onSave, onSh
                         <Badge variant="secondary" className="text-xs">
                           {laptop.seller}
                         </Badge>
+                        <DataSourceIndicator 
+                          laptopId={laptop.id}
+                          className="text-xs mt-1"
+                        />
                       </div>
                     </div>
                   </th>

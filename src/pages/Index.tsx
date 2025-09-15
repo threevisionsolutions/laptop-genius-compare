@@ -39,11 +39,12 @@ const Index = () => {
     setLoading(true);
     setUserType(selectedUserType || filters?.userType || '');
     
-    // Update API key if provided
-    if (openaiApiKey && openaiApiKey !== apiKey) {
-      setApiKey(openaiApiKey);
-      localStorage.setItem('openai_api_key', openaiApiKey);
-    }
+      // Update API key if provided
+      const currentApiKey = openaiApiKey || apiKey || localStorage.getItem('openai_api_key') || '';
+      if (openaiApiKey && openaiApiKey !== apiKey) {
+        setApiKey(openaiApiKey);
+        localStorage.setItem('openai_api_key', openaiApiKey);
+      }
     
     try {
       console.log('Starting enhanced comparison for:', urls);
@@ -83,7 +84,7 @@ const Index = () => {
       const aiSummary = await EnhancedLaptopService.generateAIComparison(
         filteredLaptops, 
         (selectedUserType || filters?.userType) as UserType,
-        apiKey || openaiApiKey
+        currentApiKey
       );
       console.log('Generated enhanced AI summary');
       
@@ -98,7 +99,7 @@ const Index = () => {
       
       toast({
         title: "Comparison Complete!",
-        description: `Analyzed ${filteredLaptops.length} laptops with ${apiKey || openaiApiKey ? 'AI-powered' : 'enhanced'} insights.`,
+        description: `Analyzed ${filteredLaptops.length} laptops with ${currentApiKey ? 'AI-powered' : 'enhanced'} insights.`,
       });
       
     } catch (error) {
