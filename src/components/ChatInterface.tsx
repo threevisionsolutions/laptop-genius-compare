@@ -112,10 +112,12 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ userType }) => {
         const lower = userMessage.content.toLowerCase();
         const brand = (lower.match(/apple|dell|hp|lenovo|asus|acer|msi|microsoft|samsung/) || [null])[0];
         const intent = /(compare|latest|new|newest|best|show|find|search)/.test(lower);
+        const countMatch = lower.match(/\b(\d{1,2})\b/);
+        const desiredCount = Math.min(Math.max(countMatch ? parseInt(countMatch[1], 10) : 5, 1), 10);
         if (brand && intent) {
           try {
             // Get structured product data optimized for Gemini
-            structuredProducts = await ProductDiscoveryService.discoverStructuredProducts(brand, 3, localStorage.getItem('tavily_api_key') || undefined);
+            structuredProducts = await ProductDiscoveryService.discoverStructuredProducts(brand, desiredCount, localStorage.getItem('tavily_api_key') || undefined);
             console.log('Found structured products:', structuredProducts);
             
               // If we have Tavily structured data, use it directly
@@ -261,11 +263,13 @@ Please analyze these ${productData.length} laptops and provide detailed recommen
           const lower = userMessage.content.toLowerCase();
           const brand = (lower.match(/apple|dell|hp|lenovo|asus|acer|msi|microsoft|samsung/) || [null])[0];
           const intent = /(compare|latest|new|newest|best|show|find|search|laptop)/.test(lower);
+          const countMatch = lower.match(/\b(\d{1,2})\b/);
+          const desiredCount = Math.min(Math.max(countMatch ? parseInt(countMatch[1], 10) : 5, 1), 10);
           
           if ((brand && intent) || lower.includes('laptop')) {
             try {
               const searchBrand = brand || 'apple'; // Default to apple if no specific brand
-              structuredProducts = await ProductDiscoveryService.discoverStructuredProducts(searchBrand, 3, localStorage.getItem('tavily_api_key') || undefined);
+              structuredProducts = await ProductDiscoveryService.discoverStructuredProducts(searchBrand, desiredCount, localStorage.getItem('tavily_api_key') || undefined);
               
               if (structuredProducts.source === 'tavily' && structuredProducts.products.length > 0) {
                 productData = structuredProducts.products.map((p: any) => ({
