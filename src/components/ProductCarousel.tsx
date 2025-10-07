@@ -45,11 +45,16 @@ const ProductCarousel: React.FC<ProductCarouselProps> = ({ products }) => {
                    {/* Product Image */}
                    <div className="aspect-video mb-4 bg-muted rounded-lg overflow-hidden">
                      <img 
-                       src={laptop.image || (laptop.images && laptop.images[0]) || '/placeholder.svg'} 
+                       src={laptop.image || (laptop.images && laptop.images[0]) || `https://placehold.co/600x400/333333/FFFFFF/png?text=${encodeURIComponent(laptop.brand + ' ' + laptop.name.split(' ')[0])}`} 
                        alt={laptop.name}
                        className="w-full h-full object-cover"
+                       loading="lazy"
                        onError={(e) => {
-                         (e.target as HTMLImageElement).src = '/placeholder.svg';
+                         // Fallback to brand-colored placeholder
+                         const target = e.target as HTMLImageElement;
+                         if (!target.src.includes('placehold.co')) {
+                           target.src = `https://placehold.co/600x400/333333/FFFFFF/png?text=${encodeURIComponent(laptop.brand)}`;
+                         }
                        }}
                      />
                    </div>

@@ -13,10 +13,10 @@ export class ImprovedWebScrapingService {
     try {
       console.log(`Scraping laptop data from: ${url}`);
       
-      // Use CORS proxy to fetch the content with timeout
+      // Use CORS proxy to fetch the content with reduced timeout for faster fallback
       const proxyUrl = this.CORS_PROXY + encodeURIComponent(url);
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+      const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
       
       const response = await fetch(proxyUrl, {
         signal: controller.signal
@@ -356,18 +356,21 @@ export class ImprovedWebScrapingService {
   }
 
   private static getBrandImage(brand: string): string {
-    const brandImages: Record<string, string> = {
-      'Apple': 'https://store.storeimages.cdn-apple.com/4982/as-images.apple.com/is/macbook-air-midnight-select-20220606',
-      'Dell': 'https://i.dell.com/is/image/DellContent/content/dam/ss2/product-images/dell-client-products/notebooks/xps-notebooks/13-9315/media-gallery/xs9315-cnb-00000ff090-gy.psd',
-      'HP': 'https://ssl-product-images.www8-hp.com/digmedialib/prodimg/lowres/c07929143.png',
-      'Lenovo': 'https://psref.lenovo.com/images/products/ThinkPad_X1_Carbon_Gen_11.png',
-      'ASUS': 'https://dlcdnwebimgs.asus.com/gain/319D3969-6292-4C76-A571-C76C5B4EC1F1/w800/h450',
-      'Acer': 'https://static.acer.com/up/Resource/Acer/Laptops/Swift_3/Images/20220321/Acer-Swift3-SF314-512-gallery-01.png',
-      'MSI': 'https://asset.msi.com/resize/image/global/product/product_1644834398c4c42fab070cf998d19362002869808d.png62405b38c58fe0f07fcef2367d8a9ba1/1024.png',
-      'Microsoft': 'https://img-prod-cms-rt-microsoft-com.akamaized.net/cms/api/am/imageFileData/RE4LqQX'
+    // Use reliable placeholder API with brand-specific colors
+    const brandColors: Record<string, string> = {
+      'Apple': 'A3AAAE',
+      'Dell': '007DB8',
+      'HP': '0096D6',
+      'Lenovo': 'E2231A',
+      'ASUS': '000000',
+      'Acer': '83B81A',
+      'MSI': 'FF0000',
+      'Microsoft': '00A4EF'
     };
     
-    return brandImages[brand] || brandImages['Dell'];
+    const color = brandColors[brand] || '333333';
+    // Using a reliable placeholder service with brand color and laptop icon
+    return `https://placehold.co/600x400/${color}/FFFFFF/png?text=${encodeURIComponent(brand + ' Laptop')}`;
   }
 
   static validateLaptopUrl(url: string): boolean {
