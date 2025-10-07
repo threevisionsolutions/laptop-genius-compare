@@ -87,7 +87,7 @@ export class RealDataService {
         brand: product.brand || this.extractBrand(product.title || ''),
         price: product.price?.amount || 999,
         currency: product.price?.currency || '$',
-        image: product.images?.[0] || 'https://images.unsplash.com/photo-1496181133206-80ce9b88a853?w=400&h=300&fit=crop&auto=format',
+        image: product.images?.[0] || `https://placehold.co/600x400/333333/FFFFFF/png?text=${encodeURIComponent((product.brand || this.extractBrand(product.title || '') || 'Laptop') + ' Laptop')}`,
         cpu: product.specs?.cpu || 'Intel Core i5',
         ram: product.specs?.ram || '8GB',
         storage: product.specs?.storage || '256GB SSD',

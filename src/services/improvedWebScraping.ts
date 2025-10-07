@@ -7,28 +7,36 @@ interface ScrapingProxy {
 }
 
 export class ImprovedWebScrapingService {
-  private static readonly CORS_PROXY = 'https://api.allorigins.win/get?url=';
+  private static readonly CORS_PROXY = '/functions/v1/proxy-fetch?url=';
   
   static async scrapeLaptopFromUrl(url: string): Promise<LaptopSpecs | null> {
     try {
       console.log(`Scraping laptop data from: ${url}`);
       
-      // Use CORS proxy to fetch the content with reduced timeout for faster fallback
+      // Fetch via Edge Function proxy with retry and sensible timeout
       const proxyUrl = this.CORS_PROXY + encodeURIComponent(url);
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
-      
-      const response = await fetch(proxyUrl, {
-        signal: controller.signal
-      });
-      clearTimeout(timeoutId);
-      
+      const attempt = async (): Promise<Response> => {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 9000); // 9s timeout to reduce AbortError
+        try {
+          const res = await fetch(proxyUrl, { signal: controller.signal });
+          return res;
+        } finally {
+          clearTimeout(timeoutId);
+        }
+      };
+
+      let response = await attempt();
+      if (!response.ok) {
+        console.warn(`Proxy fetch failed (${response.status}). Retrying once...`);
+        response = await attempt();
+      }
       if (!response.ok) {
         console.warn(`Failed to fetch ${url}: ${response.status}`);
         return this.generateMockData(url);
       }
 
-      const data = await response.json();
+      const data = await response.json().catch(() => ({ contents: '' }));
       const content = data.contents || '';
       
       // Parse the content to extract laptop specifications

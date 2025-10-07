@@ -57,9 +57,16 @@ const ComparisonTable: React.FC<ComparisonTableProps> = ({ laptops, onSave, onSh
                   <th key={laptop.id} className="text-left p-4 min-w-64">
                     <div className="space-y-2">
                       <img 
-                        src={laptop.image} 
+                        src={laptop.image || (laptop as any).images?.[0] || `https://placehold.co/320x256/333333/FFFFFF/png?text=${encodeURIComponent(laptop.brand + ' Laptop')}`}
                         alt={laptop.name}
                         className="w-20 h-16 object-cover rounded mx-auto"
+                        loading="lazy"
+                        onError={(e) => {
+                          const target = e.currentTarget as HTMLImageElement;
+                          if (!target.src.includes('placehold.co')) {
+                            target.src = `https://placehold.co/320x256/333333/FFFFFF/png?text=${encodeURIComponent(laptop.brand + ' Laptop')}`;
+                          }
+                        }}
                       />
                       <div>
                         <div className="font-bold text-sm">{laptop.name}</div>
