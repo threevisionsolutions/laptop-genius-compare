@@ -254,8 +254,9 @@ Please analyze these ${productData.length} laptops and provide detailed recommen
           }
         } catch (error) {
           console.error(`${aiProvider} API error:`, error);
-          // If AI fails, use enhanced fallback with product data
-          response = await generateChatResponse([...session.messages, userMessage], userType, productData);
+          // If AI fails, use enhanced fallback
+          const chatResponse = await generateChatResponse([...session.messages, userMessage], userType);
+          response = chatResponse.assistantMessage.content;
         }
       } else {
         // Enhanced fallback for generic queries using structured discovery
@@ -307,8 +308,9 @@ Please analyze these ${productData.length} laptops and provide detailed recommen
           }
         }
         
-        // Use product data or enhanced chat service
-        response = await generateChatResponse([...session.messages, userMessage], userType, productData);
+        // Use enhanced chat service
+        const chatResponse = await generateChatResponse([...session.messages, userMessage], userType);
+        response = chatResponse.assistantMessage.content;
       }
       
       const assistantMessage: ChatMessageType = {

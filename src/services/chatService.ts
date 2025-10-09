@@ -1,600 +1,183 @@
-import { ChatMessage } from '../types/chat';
+/**
+ * Chat service: clean, typed wrapper around the LLM for assistant responses.
+ *
+ * This file intentionally keeps logic small and testable:
+ * - buildSystemPrompt(userType) -> string
+ * - normalizeMessages(messages) -> ChatMessage[]
+ * - generateChatResponse(messages, userType) -> Promise<ChatResponse>
+ *
+ * It expects an OpenAI wrapper at ./openaiService with a function `callOpenAI`
+ * that accepts { messages, maxTokens, temperature } and returns { text, usage }.
+ *
+ * If callOpenAI is not available at runtime, it will fall back to a deterministic
+ * local summarizer so the app still runs for local/dev.
+ */
 
-export const generateChatResponse = async (messages: ChatMessage[], userType?: string, scrapingData?: any[]): Promise<string> => {
-  // Simulate processing delay
-  await new Promise(resolve => setTimeout(resolve, 800));
-  
-  const lastMessage = messages[messages.length - 1];
-  const userMessage = lastMessage.content.toLowerCase();
-  const conversation = messages.map(m => m.content).join(' ').toLowerCase();
-  
-  // Handle URL-based comparisons with scraping data
-  if (scrapingData && scrapingData.length > 0) {
-    return generateComparisonResponse(scrapingData, userMessage);
-  }
-  
-  // Check for URLs in the message
-  const urlPattern = /https?:\/\/[^\s]+/g;
-  if (userMessage.match(urlPattern)) {
-    return generateUrlAnalysisResponse(userMessage);
-  }
-  
-  // Context-aware responses based on conversation history
-  const context = analyzeConversationContext(conversation);
-  
-  // Multi-keyword and context-aware matching
-  if (matchesKeywords(userMessage, ['budget', 'cheap', 'affordable', 'under', 'price', 'cost']) || context.budgetFocused) {
-    return generateBudgetResponse(userType, context);
-  }
-  
-  if (matchesKeywords(userMessage, ['gaming', 'game', 'fps', 'graphics', 'rtx', 'nvidia']) || context.gamingFocused) {
-    return generateGamingResponse(context);
-  }
-  
-  if (matchesKeywords(userMessage, ['programming', 'coding', 'development', 'python', 'javascript', 'ide']) || context.programmingFocused) {
-    return generateProgrammingResponse(context);
-  }
-  
-  if (matchesKeywords(userMessage, ['student', 'school', 'university', 'college', 'study']) || context.studentFocused) {
-    return generateStudentResponse(context);
-  }
-  
-  if (matchesKeywords(userMessage, ['business', 'work', 'office', 'professional', 'enterprise']) || context.businessFocused) {
-    return generateBusinessResponse(context);
-  }
-  
-  if (matchesKeywords(userMessage, ['specs', 'cpu', 'ram', 'processor', 'performance', 'benchmark'])) {
-    return generateSpecsResponse(context);
-  }
-  
-  // MacBook-specific comparisons
-  if (matchesKeywords(userMessage, ['macbook', 'mac book', 'macbook pro', 'macbook air', 'imac', 'mac mini'])) {
-    return generateMacBookComparisonResponse(context, userMessage);
-  }
-  
-  if (matchesKeywords(userMessage, ['brand', 'apple', 'dell', 'hp', 'lenovo', 'asus', 'acer', 'microsoft'])) {
-    return generateBrandResponse(context);
-  }
-  
-  if (matchesKeywords(userMessage, ['compare', 'comparison', 'vs', 'versus', 'difference', 'better'])) {
-    return generateComparisonGuideResponse(context);
-  }
-  
-  if (matchesKeywords(userMessage, ['recommend', 'suggestion', 'best', 'top', 'good'])) {
-    return generatePersonalizedRecommendation(userType, context, conversation);
-  }
-  
-  // Default contextual response
-  return generateContextualResponse(userType, context, userMessage);
+import { v4 as uuidv4 } from 'uuid';
+
+type Role = 'system' | 'user' | 'assistant';
+
+export type ChatMessage = {
+  role: Role;
+  content: string;
 };
 
-// Helper functions
-const matchesKeywords = (text: string, keywords: string[]): boolean => {
-  return keywords.some(keyword => text.includes(keyword));
+export type ChatResponse = {
+  id: string;
+  assistantMessage: ChatMessage;
+  raw?: any;
+  tokensUsed?: number;
 };
 
-const analyzeConversationContext = (conversation: string) => {
-  return {
-    budgetFocused: matchesKeywords(conversation, ['budget', 'cheap', 'affordable', 'price']),
-    gamingFocused: matchesKeywords(conversation, ['gaming', 'game', 'fps', 'graphics']),
-    programmingFocused: matchesKeywords(conversation, ['programming', 'coding', 'development']),
-    studentFocused: matchesKeywords(conversation, ['student', 'school', 'university']),
-    businessFocused: matchesKeywords(conversation, ['business', 'work', 'office']),
-    mentionedBrands: extractMentionedBrands(conversation),
-    priceRange: extractPriceRange(conversation)
+/**
+ * Try to import your OpenAI wrapper. If it's missing at runtime, we keep a null
+ * value and use fallback behavior.
+ */
+let callOpenAI: undefined | ((opts: {
+  messages: ChatMessage[];
+  maxTokens?: number;
+  temperature?: number;
+}) => Promise<{ text: string; usage?: { total_tokens?: number } }>) = undefined;
+
+try {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const openai = require('./openaiService');
+  if (openai && typeof openai.callOpenAI === 'function') {
+    callOpenAI = openai.callOpenAI;
+  }
+} catch (err) {
+  // Module not found or other runtime issue — we'll fall back below.
+}
+
+/**
+ * Create a concise system prompt depending on userType (persona).
+ * Exported so you can unit-test the mapping easily.
+ */
+export function buildSystemPrompt(userType?: string): string {
+  const base = [
+    'You are a concise technical assistant that explains laptop comparisons.',
+    'When asked, produce short (40–100 words) rationales, 3 pros, and 1 short con.',
+    'Be factual and avoid inventing specs not present in the provided structured fields.'
+  ].join(' ');
+
+  if (!userType) return base;
+
+  const map: Record<string, string> = {
+    gaming:
+      'Prioritize GPU, CPU single-thread performance, and thermals. Mention FPS expectations only if explicit GPU model present.',
+    creative:
+      'Prioritize CPU performance, RAM, storage speed, and color-accurate displays. Mention that external GPUs or eGPUs may be required if GPU is weak.',
+    programming:
+      'Prioritize CPU multi-core performance, RAM, battery life, and keyboard comfort. Favor sustained workloads and thermal throttling awareness.',
+    student:
+      'Prioritize battery life, portability, and price. Favor lightweight models and long battery estimates.',
+    portable:
+      'Prioritize weight, battery life, and screen size. Mention trade-offs in port selection and cooling.'
   };
-};
 
-const extractMentionedBrands = (text: string): string[] => {
-  const brands = ['apple', 'dell', 'hp', 'lenovo', 'asus', 'acer', 'microsoft', 'razer', 'alienware'];
-  return brands.filter(brand => text.includes(brand));
-};
+  const normalized = (userType || '').toLowerCase().trim();
+  if (map[normalized]) return `${base} ${map[normalized]}`;
 
-const extractPriceRange = (text: string): string | null => {
-  const priceMatch = text.match(/\$?(\d+)/);
-  if (priceMatch) {
-    const price = parseInt(priceMatch[1]);
-    if (price < 500) return 'under-500';
-    if (price < 1000) return '500-1000';
-    if (price < 1500) return '1000-1500';
-    return 'over-1500';
-  }
-  return null;
-};
+  // fallback for unknown user types
+  return `${base} Focus on the user's described needs: ${userType}.`;
+}
 
-const generateComparisonResponse = (scrapingData: any[], userMessage: string): string => {
-  const laptops = scrapingData.slice(0, 3); // Compare top 3
-  
-  return `I've analyzed the laptops from the URLs you provided. Here's my comparison:
+/**
+ * Ensure messages are safe and normalized.
+ */
+export function normalizeMessages(messages: ChatMessage[]): ChatMessage[] {
+  if (!Array.isArray(messages)) return [];
+  return messages
+    .map(m => ({
+      role: m && m.role ? (m.role as Role) : 'user',
+      content: typeof m?.content === 'string' ? m.content.trim() : ''
+    }))
+    .filter(m => m.content.length > 0);
+}
 
-${laptops.map((laptop, index) => `
-**${index + 1}. ${laptop.name}** - $${laptop.price}
-• **CPU:** ${laptop.cpu}
-• **RAM:** ${laptop.ram}
-• **Storage:** ${laptop.storage}
-• **Graphics:** ${laptop.graphics || 'Integrated'}
-• **Display:** ${laptop.display || 'Standard'}
-`).join('')}
+/**
+ * Main exported function:
+ * - builds a system message
+ * - calls your LLM wrapper
+ * - falls back to a deterministic generator if LLM isn't available
+ */
+export async function generateChatResponse(
+  messages: ChatMessage[],
+  userType?: string
+): Promise<ChatResponse> {
+  const normalized = normalizeMessages(messages);
+  const systemPrompt = buildSystemPrompt(userType);
 
-**My Recommendation:**
-${generateSmartComparison(laptops, userMessage)}
-
-Would you like me to explain any specific aspect of these laptops or help you decide based on your use case?`;
-};
-
-const generateSmartComparison = (laptops: any[], userMessage: string): string => {
-  const gaming = matchesKeywords(userMessage, ['gaming', 'game']);
-  const budget = matchesKeywords(userMessage, ['budget', 'cheap']);
-  const programming = matchesKeywords(userMessage, ['programming', 'coding']);
-  
-  if (gaming) {
-    const bestGaming = laptops.find(l => l.graphics && !l.graphics.includes('Integrated'));
-    return bestGaming ? `For gaming, I'd recommend the ${bestGaming.name} due to its dedicated graphics card.` : 
-           'None of these laptops are ideal for gaming - consider models with dedicated GPUs like RTX or GTX series.';
-  }
-  
-  if (budget) {
-    const cheapest = laptops.reduce((prev, curr) => (prev.price < curr.price ? prev : curr));
-    return `For budget-conscious users, the ${cheapest.name} at $${cheapest.price} offers the best value.`;
-  }
-  
-  const balanced = laptops.find(l => l.ram && parseInt(l.ram) >= 8 && l.cpu && !l.cpu.includes('Celeron'));
-  return balanced ? `The ${balanced.name} offers the best overall balance of performance and features.` : 
-         'Consider looking for laptops with at least 8GB RAM and modern processors for better performance.';
-};
-
-const generateUrlAnalysisResponse = (userMessage: string): string => {
-  return `I can see you've shared laptop URLs! Let me analyze them for you...
-
-Unfortunately, I need a moment to process the website data. In the meantime, here's what I can help with:
-
-• **Compare specifications** side by side
-• **Explain technical terms** in simple language  
-• **Recommend based on your needs** - what will you use the laptop for?
-• **Check price-to-performance ratio**
-• **Identify potential issues** or limitations
-
-While I process the URLs, could you tell me:
-1. What's your primary use case? (work, gaming, school, etc.)
-2. What's your budget range?
-3. Any specific requirements? (screen size, weight, battery life)
-
-This will help me give you a more targeted analysis once I process the laptop data!`;
-};
-
-const generateComparisonGuideResponse = (context: any): string => {
-  return `I'd love to help you compare laptops! Here's my systematic approach:
-
-**Key Comparison Areas:**
-• **Performance:** CPU (Intel i5/i7 vs AMD Ryzen), RAM (8GB minimum, 16GB ideal)
-• **Graphics:** Integrated vs Dedicated (RTX/GTX for gaming)
-• **Storage:** SSD vs HDD (SSD is much faster)
-• **Display:** Screen size, resolution, refresh rate
-• **Build Quality:** Materials, keyboard, trackpad
-• **Battery Life:** Real-world usage expectations
-• **Price-to-Performance:** Best value for your needs
-
-**To give you specific comparisons, I need:**
-1. **Laptop models or URLs** you're considering
-2. **Your primary use case** (work, gaming, creative, school)
-3. **Budget range**
-4. **Must-have features** (touchscreen, 2-in-1, specific ports)
-
-Share some laptops you're looking at, and I'll break down the pros and cons of each!`;
-};
-
-const generatePersonalizedRecommendation = (userType: string | undefined, context: any, conversation: string): string => {
-  let recommendations = '';
-  
-  if (context.priceRange === 'under-500') {
-    recommendations = `**Budget Recommendations (Under $500):**
-• **ASUS VivoBook 15** - AMD Ryzen 5, great performance per dollar
-• **Acer Aspire 5** - Intel i5, solid build quality
-• **HP Pavilion 15** - Good battery life, reliable brand`;
-  } else if (context.priceRange === '500-1000') {
-    recommendations = `**Mid-Range Recommendations ($500-$1000):**
-• **Lenovo ThinkPad E15** - Excellent keyboard, business-grade durability
-• **ASUS ZenBook 14** - Premium design, great display
-• **HP Envy x360** - 2-in-1 flexibility, AMD Ryzen power`;
-  } else {
-    recommendations = `**My Current Top Recommendations:**
-• **For Overall Value:** Lenovo ThinkPad E15 - reliable, powerful, great keyboard
-• **For Students:** ASUS VivoBook S15 - lightweight, good battery, affordable
-• **For Professionals:** HP EliteBook 840 - premium build, security features
-• **For Gaming:** ASUS TUF Gaming - dedicated GPU, good cooling`;
-  }
-  
-  return `${recommendations}
-
-**Based on our conversation, I think you'd benefit from:**
-${generateContextualSuggestion(context, userType)}
-
-Would you like me to explain why I chose these, or do you have specific models in mind to compare?`;
-};
-
-const generateContextualSuggestion = (context: any, userType?: string): string => {
-  const suggestions = [];
-  
-  if (context.programmingFocused) {
-    suggestions.push('• At least 16GB RAM for smooth development environment');
-    suggestions.push('• SSD storage for fast code compilation');
-    suggestions.push('• Good keyboard for long coding sessions');
-  }
-  
-  if (context.studentFocused) {
-    suggestions.push('• Lightweight design for portability');
-    suggestions.push('• Good battery life for all-day use');
-    suggestions.push('• Affordable with solid performance');
-  }
-  
-  if (context.gamingFocused) {
-    suggestions.push('• Dedicated graphics card (GTX/RTX series)');
-    suggestions.push('• High refresh rate display');
-    suggestions.push('• Good cooling system');
-  }
-  
-  return suggestions.length > 0 ? suggestions.join('\n') : 
-    '• Focus on overall performance and reliability for your needs';
-};
-
-const generateContextualResponse = (userType: string | undefined, context: any, userMessage: string): string => {
-  const responses = [
-    `I'm here to help you find the perfect laptop! Based on what you've told me, I can provide personalized recommendations.
-
-**What I can help with:**
-• Find laptops that match your specific needs and budget
-• Explain technical specifications in simple terms
-• Compare different models side by side
-• Analyze laptop URLs you're considering
-
-**To give you the best advice, tell me:**
-1. What will you primarily use the laptop for?
-2. What's your budget range?
-3. Any preferences for brand, size, or features?
-
-Feel free to share laptop URLs for detailed analysis, or just describe what you're looking for!`,
-
-    `Great question! Let me help you navigate the laptop market.
-
-**Current Market Trends:**
-• AMD Ryzen processors offer excellent value vs Intel
-• SSD storage is now standard (avoid HDDs)
-• 8GB RAM minimum, 16GB recommended for multitasking
-• Integrated graphics fine for most tasks, dedicated GPU for gaming/creative work
-
-**Popular Categories:**
-• **Ultrabooks:** Thin, light, premium (Dell XPS, MacBook Air)
-• **Business:** Durable, secure (ThinkPad, EliteBook)  
-• **Gaming:** Powerful graphics, gaming features (ASUS ROG, MSI)
-• **Budget:** Good value, basic features (Aspire, VivoBook)
-
-What type of laptop user are you? I can narrow down recommendations based on your needs!`
+  const payloadMessages: ChatMessage[] = [
+    { role: 'system', content: systemPrompt },
+    ...normalized
   ];
-  
-  return responses[Math.floor(Math.random() * responses.length)];
-};
 
-const generateBudgetResponse = (userType?: string, context?: any) => {
-  return `For budget-friendly laptops, here are my top recommendations:
+  // If OpenAI wrapper is configured, call it. Keep parameters conservative.
+  if (typeof callOpenAI === 'function') {
+    try {
+      const result = await callOpenAI({
+        messages: payloadMessages,
+        maxTokens: 200,
+        temperature: 0.15
+      });
 
-**Under $500:**
-• ASUS VivoBook 15 - Great value with AMD Ryzen processors
-• Acer Aspire 5 - Solid performance for everyday tasks
-• HP Pavilion 15 - Reliable with good battery life
+      const assistantText = typeof result?.text === 'string' ? result.text.trim() : '';
 
-**$500-$800:**
-• Lenovo IdeaPad 5 - Excellent build quality and performance
-• ASUS ZenBook 14 - Premium feel at mid-range price
-• HP Envy x360 - 2-in-1 versatility
+      const response: ChatResponse = {
+        id: uuidv4(),
+        assistantMessage: {
+          role: 'assistant',
+          content: assistantText || 'Sorry, I could not generate an answer right now.'
+        },
+        raw: result,
+        tokensUsed: result?.usage?.total_tokens
+      };
 
-**Money-saving tips:**
-• Look for last-gen processors (still very capable)
-• Consider refurbished from reputable sellers
-• Wait for back-to-school sales (July-September)
-• Check manufacturer outlet stores
+      return response;
+    } catch (err) {
+      // Keep error handling friendly: return fallback text instead of throwing
+      const errorMsg =
+        (err instanceof Error ? err.message : 'Unknown error') || 'LLM call failed — using fallback answer';
+      // eslint-disable-next-line no-console
+      console.warn('generateChatResponse LLM error:', errorMsg, err);
 
-${userType ? `For ${userType} use, I'd especially recommend focusing on models with sufficient RAM (8GB+) and SSD storage.` : ''}
-
-What's your target budget range?`;
-};
-
-const generateGamingResponse = (context?: any) => {
-  return `For gaming laptops, here's what you need to know:
-
-**Essential Gaming Specs:**
-• GPU: RTX 4060/4070 or RX 7600M/7700S minimum
-• CPU: Intel i5-12400H+ or AMD Ryzen 5 7600H+
-• RAM: 16GB DDR4/DDR5 (32GB for AAA titles)
-• Display: 144Hz+ refresh rate, 1080p minimum
-
-**Top Gaming Laptop Recommendations:**
-• **ASUS ROG Strix G15** - Best value performance
-• **MSI Katana 15** - Budget-friendly gaming
-• **Alienware m15 R7** - Premium gaming experience
-• **Lenovo Legion 5 Pro** - Great balance of price/performance
-
-**Gaming-Specific Features:**
-• Advanced cooling systems (dual-fan minimum)
-• RGB keyboard backlighting
-• High refresh rate displays (144Hz-240Hz)
-• Adequate port selection (USB-A, USB-C, HDMI)
-
-**Budget Ranges:**
-• Entry Gaming: $800-$1,200
-• Mid-Range Gaming: $1,200-$1,800
-• High-End Gaming: $1,800+
-
-What types of games are you planning to play?`;
-};
-
-const generateProgrammingResponse = (context?: any) => {
-  return `For programming and development, here are my recommendations:
-
-**Essential Development Specs:**
-• CPU: Intel i5/i7 or AMD Ryzen 5/7 (multi-core performance matters)
-• RAM: 16GB minimum, 32GB preferred for VMs/containers
-• Storage: 512GB+ SSD (fast read/write for compilation)
-• Display: 14"+ with good color accuracy
-
-**Top Developer Laptops:**
-• **MacBook Air M2** - Excellent for web dev, iOS development
-• **ThinkPad X1 Carbon** - Linux-friendly, great keyboard
-• **Dell XPS 15** - Powerful Windows option
-• **Framework Laptop** - Modular, repairable design
-
-**OS Considerations:**
-• **macOS**: Great for web dev, mobile dev, design
-• **Linux**: Preferred by many developers, great customization
-• **Windows**: Necessary for .NET, game dev, broad compatibility
-
-**Development-Specific Features:**
-• Excellent keyboard (you'll be typing a lot!)
-• Multiple USB ports for peripherals
-• Good webcam for video calls
-• Quiet cooling (for those long coding sessions)
-
-**Budget Ranges:**
-• Student/Beginner: $600-$1,000
-• Professional Dev: $1,000-$2,000
-• Specialized Work: $2,000+
-
-What programming languages or frameworks do you primarily work with?`;
-};
-
-const generateStudentResponse = (context?: any) => {
-  return `For students, here are my budget-friendly recommendations:
-
-**Best Student Laptops:**
-• **MacBook Air M1/M2** - Long battery, great for research and papers
-• **ASUS VivoBook S15** - Windows alternative with good value
-• **Lenovo IdeaPad 3** - Budget-friendly with solid performance
-• **HP Pavilion 14** - Compact and portable for campus life
-
-**Student-Essential Features:**
-• 8+ hour battery life (for all-day classes)
-• Lightweight design (under 4 lbs)
-• Good keyboard for note-taking and essays
-• Reliable Wi-Fi connectivity
-• Webcam for online classes
-
-**Money-Saving Tips for Students:**
-• Check for student discounts (Apple, Microsoft, Adobe)
-• Consider certified refurbished models
-• Look for back-to-school promotions
-• Some schools offer laptop rental programs
-
-**Recommended Specs:**
-• CPU: Intel i3/i5 or AMD Ryzen 3/5
-• RAM: 8GB (upgradeable preferred)
-• Storage: 256GB SSD minimum
-• Display: 13-15 inches for portability
-
-**Budget Guidelines:**
-• Basic needs: $400-$700
-• Engineering/Design students: $800-$1,200
-• Graduate students: $700-$1,000
-
-What's your field of study? This can help me give more specific recommendations!`;
-};
-
-const generateBusinessResponse = (context?: any) => {
-  return `For business and professional use, here are my recommendations:
-
-**Top Business Laptops:**
-• **ThinkPad X1 Carbon** - Industry standard, excellent keyboard
-• **Dell Latitude 9000 Series** - Enterprise features, security
-• **MacBook Pro 14"** - Creative professionals, premium build
-• **HP EliteBook 800 Series** - Security-focused, durable
-
-**Business-Critical Features:**
-• TPM 2.0 chip for security
-• Fingerprint reader or Windows Hello
-• Docking station compatibility
-• Professional appearance and build quality
-• Excellent keyboard and trackpad
-
-**Performance Requirements:**
-• CPU: Intel i5/i7 vPro or AMD Ryzen Pro
-• RAM: 16GB for multitasking
-• Storage: 512GB+ SSD with encryption
-• Display: Anti-glare, good outdoor visibility
-
-**Connectivity Needs:**
-• USB-C with Thunderbolt
-• HDMI for presentations
-• Ethernet port (or adapter)
-• Multiple USB-A ports
-• SD card reader (optional)
-
-**Business Software Compatibility:**
-• Microsoft Office Suite optimization
-• VPN client support
-• Video conferencing (Teams, Zoom, WebEx)
-• Cloud storage integration
-
-**Budget Ranges:**
-• Small Business: $800-$1,200
-• Corporate Standard: $1,200-$1,800
-• Executive/Premium: $1,800+
-
-What type of business work will you primarily be doing?`;
-};
-
-const generateSpecsResponse = (context?: any) => {
-  return `Let me break down laptop specs in simple terms:
-
-**CPU (Processor) - The Brain:**
-• **Intel**: i3 (basic), i5 (good), i7 (great), i9 (overkill for most)
-• **AMD**: Ryzen 3 (basic), Ryzen 5 (good), Ryzen 7 (great)
-• **Apple**: M1/M2 (excellent performance and efficiency)
-
-**RAM (Memory) - Multitasking Power:**
-• 8GB: Minimum for modern use
-• 16GB: Sweet spot for most users
-• 32GB: For heavy workloads, video editing
-
-**Storage - Your File Cabinet:**
-• **SSD**: Fast, silent, durable (recommended)
-• **HDD**: Slower but cheaper (avoid if possible)
-• **Size**: 256GB minimum, 512GB+ recommended
-
-**Graphics (GPU) - Visual Processing:**
-• **Integrated**: Good for basic tasks, light gaming
-• **Dedicated**: Necessary for gaming, video editing, 3D work
-
-**Display - What You See:**
-• **Size**: 13-14" (portable), 15-16" (desktop replacement)
-• **Resolution**: 1080p minimum, 1440p/4K for professionals
-• **Panel**: IPS (better colors) vs TN (cheaper)
-
-**Battery Life:**
-• 6-8 hours: Acceptable
-• 8-12 hours: Good
-• 12+ hours: Excellent (usually Apple or efficient CPUs)
-
-**Build Quality Indicators:**
-• Materials: Aluminum > plastic
-• Keyboard: Backlit, comfortable key travel
-• Ports: USB-C, USB-A, HDMI variety
-
-What specific aspect would you like me to explain further?`;
-};
-
-const generateMacBookComparisonResponse = (context: any, userMessage: string): string => {
-  const currentDate = new Date().getFullYear();
-  
-  return `I'll help you compare MacBooks! Here's my comprehensive breakdown:
-
-**Current MacBook Lineup (${currentDate}):**
-
-**MacBook Air M2/M3** - $1,099-$1,499
-• **Best for:** Students, everyday use, portability
-• **CPU:** Apple M2/M3 chip (8-core CPU)
-• **RAM:** 8GB-24GB unified memory
-• **Storage:** 256GB-2TB SSD  
-• **Display:** 13.6" Liquid Retina (2560×1664)
-• **Battery:** Up to 18 hours
-• **Weight:** 2.7 lbs
-• **Pros:** Fanless design, excellent battery, lightweight
-• **Cons:** Limited ports, expensive storage upgrades
-
-**MacBook Pro 14"** - $1,999-$3,199
-• **Best for:** Professional work, content creation
-• **CPU:** M3 Pro/Max chips (11-16 core CPU)
-• **RAM:** 18GB-128GB unified memory
-• **Storage:** 512GB-8TB SSD
-• **Display:** 14.2" Liquid Retina XDR (3024×1964)
-• **Battery:** Up to 22 hours
-• **Weight:** 3.5 lbs
-• **Pros:** ProMotion display, excellent performance, more ports
-• **Cons:** Higher price, heavier than Air
-
-**MacBook Pro 16"** - $2,499-$4,299
-• **Best for:** Power users, developers, video editors
-• **CPU:** M3 Pro/Max/Ultra chips (12-24 core CPU)
-• **RAM:** 18GB-128GB unified memory
-• **Storage:** 512GB-8TB SSD
-• **Display:** 16.2" Liquid Retina XDR (3456×2234)
-• **Battery:** Up to 22 hours
-• **Weight:** 4.8 lbs
-• **Pros:** Largest screen, maximum performance, best cooling
-• **Cons:** Most expensive, heaviest
-
-**My Recommendation Based on Use Case:**
-${generateMacBookRecommendation(userMessage, context)}
-
-**Key Advantages of MacBooks:**
-• Exceptional build quality and longevity
-• Outstanding battery life (best in class)
-• macOS ecosystem integration
-• Excellent displays with accurate colors
-• Strong resale value
-• Great for creative work (design, video, music)
-
-**Consider Windows alternatives if:**
-• You need specific Windows software
-• Gaming is important to you
-• You want more hardware customization options
-• Budget is tight (more options under $1000)
-
-Would you like me to compare specific MacBook models or explain how they stack up against Windows laptops for your use case?`;
-};
-
-const generateMacBookRecommendation = (userMessage: string, context: any): string => {
-  if (matchesKeywords(userMessage, ['student', 'school', 'basic', 'budget'])) {
-    return `For students or basic use, I'd recommend the **MacBook Air M2** (base model). It offers excellent performance for everyday tasks, amazing battery life, and the signature MacBook build quality at the most accessible price point.`;
+      return fallbackResponse(normalized, userType, errorMsg);
+    }
   }
-  
-  if (matchesKeywords(userMessage, ['professional', 'work', 'creative', 'video', 'photo', 'design'])) {
-    return `For professional work, the **MacBook Pro 14" with M3 Pro** is the sweet spot. You get the professional features like the XDR display, better performance, and more ports without the premium of the 16" model.`;
-  }
-  
-  if (matchesKeywords(userMessage, ['programming', 'coding', 'development'])) {
-    return `For programming, either the **MacBook Air M2 (16GB)** for light development or **MacBook Pro 14"** for intensive development work. The unified memory architecture makes multitasking very smooth.`;
-  }
-  
-  if (matchesKeywords(userMessage, ['gaming', 'game'])) {
-    return `MacBooks aren't ideal for gaming due to limited game compatibility and focus on efficiency over gaming performance. Consider Windows laptops with dedicated GPUs if gaming is important.`;
-  }
-  
-  return `For most users, I'd recommend the **MacBook Air M2** as it offers the best balance of performance, portability, and price. Upgrade to 16GB RAM if you do heavy multitasking or keep many browser tabs open.`;
-};
 
-const generateBrandResponse = (context?: any) => {
-  return `Here's my honest take on laptop brands:
+  // If no LLM wrapper present, return deterministic fallback
+  return fallbackResponse(normalized, userType, 'no LLM configured');
+}
 
-**Premium Tier:**
-• **Apple** - Best build quality, excellent support, macOS ecosystem
-• **ThinkPad (Lenovo)** - Business-grade durability, best keyboards
-• **Dell XPS** - Premium Windows laptops, great displays
+/**
+ * Deterministic local fallback to avoid crashing in dev without API keys.
+ * It uses the last user message and returns a small, predictable reply.
+ */
+function fallbackResponse(
+  normalizedMessages: ChatMessage[],
+  userType?: string,
+  reason?: string
+): ChatResponse {
+  const lastUser = [...normalizedMessages].reverse().find(m => m.role === 'user') || {
+    content: 'No user message provided.'
+  };
 
-**Solid Mid-Range:**
-• **ASUS** - Good value, wide range of options
-• **HP** - Reliable, good support network
-• **Acer** - Budget-friendly with decent performance
+  const assistantText = [
+    `Fallback assistant response (${reason || 'fallback'}).`,
+    `Persona: ${userType || 'general'}.`,
+    `You asked: "${lastUser.content.slice(0, 240)}"`,
+    'I would recommend comparing GPU, CPU, RAM, storage, and battery for this use-case.'
+  ].join(' ');
 
-**Gaming Specialists:**
-• **ASUS ROG** - Gaming performance leader
-• **MSI** - Great gaming features and cooling
-• **Alienware (Dell)** - Premium gaming brand
+  return {
+    id: uuidv4(),
+    assistantMessage: {
+      role: 'assistant',
+      content: assistantText
+    },
+    tokensUsed: 0
+  };
+}
 
-**Budget Champions:**
-• **Lenovo IdeaPad** - Best budget Windows laptops
-• **ASUS VivoBook** - Good specs for the price
-• **HP Pavilion** - Reliable budget option
-
-**Brand Reputation Summary:**
-✅ **Most Reliable**: Apple, ThinkPad, Dell Business
-✅ **Best Value**: ASUS, Lenovo consumer lines
-✅ **Gaming**: ASUS ROG, MSI
-✅ **Support**: Apple, Dell, HP
-⚠️ **Avoid**: Very cheap unknown brands, old Toshiba
-
-**My Honest Recommendations:**
-• **For reliability**: Apple or ThinkPad
-• **For value**: ASUS or Lenovo
-• **For gaming**: ASUS ROG or MSI
-• **For business**: Dell Latitude or ThinkPad
-
-What's most important to you: reliability, performance, price, or specific features?`;
-};
+export default generateChatResponse;
