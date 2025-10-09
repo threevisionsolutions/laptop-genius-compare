@@ -95,11 +95,14 @@ const ComparisonTable: React.FC<ComparisonTableProps> = ({ laptops, onSave, onSh
               {specs.map((spec) => (
                 <tr key={spec.key} className="border-b hover:bg-muted/50">
                   <td className="p-4 font-medium">{spec.label}</td>
-                  {laptops.map((laptop) => (
-                    <td key={laptop.id} className="p-4">
-                      {laptop[spec.key as keyof LaptopSpecs]}
-                    </td>
-                  ))}
+                  {laptops.map((laptop) => {
+                    const value = laptop[spec.key as keyof LaptopSpecs];
+                    return (
+                      <td key={laptop.id} className="p-4">
+                        {typeof value === 'string' || typeof value === 'number' ? value : 'N/A'}
+                      </td>
+                    );
+                  })}
                 </tr>
               ))}
             </tbody>
